@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
+import { RAW_EXTS } from '../rawFormats'
 
 function buildLocalFileUrl(filePath: string): string {
   return `localfile://localhost/?p=${encodeURIComponent(filePath)}`
@@ -218,14 +219,25 @@ export default function MetadataPanel() {
     )
   }
 
-  const imageUrl = buildLocalFileUrl(photo.path)
+  const isRaw = RAW_EXTS.has(photo.extension)
+  const imageUrl = isRaw ? undefined : buildLocalFileUrl(photo.path)
   const modDate = new Date(photo.modified).toLocaleString()
 
   return (
     <aside className="metadata-panel">
       {/* Preview image */}
       <div className="metadata-preview">
-        <img src={imageUrl} alt={photo.name} className="metadata-preview-img" />
+        {isRaw ? (
+          <div className="raw-preview-placeholder">
+            <svg width="36" height="36" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M10.5 8.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+              <path d="M2 4a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1.172a2 2 0 01-1.414-.586l-.828-.828A2 2 0 009.172 2H6.828a2 2 0 00-1.414.586l-.828.828A2 2 0 013.172 4H2zm.5 2a.5.5 0 110-1 .5.5 0 010 1zm9 2.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z"/>
+            </svg>
+            <span className="raw-preview-ext">{photo.extension}</span>
+          </div>
+        ) : (
+          <img src={imageUrl} alt={photo.name} className="metadata-preview-img" />
+        )}
       </div>
 
       <div className="metadata-content">

@@ -959,6 +959,55 @@ a {
   padding: 4px;
 }
 
+/* ─── RAW format placeholder ─────────────────────────────────────────────────── */
+.raw-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: var(--nord1);
+  color: var(--nord3);
+}
+
+.raw-placeholder-icon {
+  opacity: 0.6;
+}
+
+.raw-placeholder-ext {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--nord8);
+  background: rgba(136, 192, 208, 0.12);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.raw-preview-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--nord0);
+  color: var(--nord3);
+}
+
+.raw-preview-ext {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--nord8);
+  background: rgba(136, 192, 208, 0.12);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+}
+
 /* ─── Skeleton loaders ───────────────────────────────────────────────────────── */
 .photo-item-skeleton {
   border-radius: var(--radius);

@@ -61,6 +61,7 @@ let exifrLib: any = null
 // ─── MIME types for photo extensions ─────────────────────────────────────────
 
 const PHOTO_MIME: Record<string, string> = {
+  // Standard web formats
   '.jpg':  'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png':  'image/png',
@@ -70,6 +71,30 @@ const PHOTO_MIME: Record<string, string> = {
   '.tif':  'image/tiff',
   '.bmp':  'image/bmp',
   '.heic': 'image/heic',
+  // RAW formats (Chromium cannot decode these, but serve them so the
+  // protocol handler doesn't reject them with 403)
+  '.raf':  'image/x-fuji-raf',
+  '.cr2':  'image/x-canon-cr2',
+  '.cr3':  'image/x-canon-cr3',
+  '.nef':  'image/x-nikon-nef',
+  '.nrw':  'image/x-nikon-nrw',
+  '.arw':  'image/x-sony-arw',
+  '.srf':  'image/x-sony-srf',
+  '.sr2':  'image/x-sony-sr2',
+  '.orf':  'image/x-olympus-orf',
+  '.rw2':  'image/x-panasonic-rw2',
+  '.rwl':  'image/x-leica-rwl',
+  '.dng':  'image/x-adobe-dng',
+  '.pef':  'image/x-pentax-pef',
+  '.x3f':  'image/x-sigma-x3f',
+  '.3fr':  'image/x-hasselblad-3fr',
+  '.raw':  'image/x-raw',
+  '.mrw':  'image/x-minolta-mrw',
+  '.kdc':  'image/x-kodak-kdc',
+  '.dcr':  'image/x-kodak-dcr',
+  '.mef':  'image/x-mamiya-mef',
+  '.iiq':  'image/x-phase-one-iiq',
+  '.erf':  'image/x-epson-erf',
 }
 
 // ─── Custom protocol (MUST be before app.whenReady) ──────────────────────────
@@ -233,7 +258,24 @@ ipcMain.handle('dialog:openFolder', async () => {
 // ─── IPC: File system ─────────────────────────────────────────────────────────
 
 const PHOTO_EXTENSIONS = new Set([
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.tiff', '.tif', '.bmp', '.heic'
+  // Standard web formats
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.tiff', '.tif', '.bmp', '.heic',
+  // RAW formats
+  '.raf',                          // Fujifilm
+  '.cr2', '.cr3',                  // Canon
+  '.nef', '.nrw',                  // Nikon
+  '.arw', '.srf', '.sr2',         // Sony
+  '.orf',                          // Olympus / OM System
+  '.rw2',                          // Panasonic
+  '.rwl',                          // Leica
+  '.dng', '.pef',                  // Adobe DNG / Pentax / Ricoh
+  '.x3f',                          // Sigma
+  '.3fr',                          // Hasselblad
+  '.raw',                          // Leica / generic
+  '.mrw',                          // Minolta / Konica-Minolta
+  '.kdc', '.dcr',                  // Kodak
+  '.mef', '.iiq',                  // Mamiya / Phase One
+  '.erf',                          // Epson
 ])
 
 ipcMain.handle('fs:readDirectory', async (_event, dirPath: string) => {

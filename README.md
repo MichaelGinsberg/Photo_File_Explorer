@@ -31,7 +31,27 @@ A cross-platform desktop application for browsing, tagging, and organizing photo
 | **Nord theme** | Full Nord dark palette throughout the UI |
 | **Native window** | Custom frameless title bar on Windows; native traffic lights on macOS |
 
-**Supported formats:** JPG · JPEG · PNG · GIF · WEBP · TIFF · TIF · BMP · HEIC
+**Supported formats:**
+
+| Category | Extensions |
+|---|---|
+| Standard | JPG · JPEG · PNG · GIF · WEBP · TIFF · TIF · BMP · HEIC |
+| Fujifilm RAW | RAF |
+| Canon RAW | CR2 · CR3 |
+| Nikon RAW | NEF · NRW |
+| Sony RAW | ARW · SRF · SR2 |
+| Olympus / OM System RAW | ORF |
+| Panasonic RAW | RW2 |
+| Leica RAW | RWL · RAW |
+| Adobe / Pentax / Ricoh | DNG · PEF |
+| Sigma RAW | X3F |
+| Hasselblad RAW | 3FR |
+| Minolta / Konica-Minolta RAW | MRW |
+| Kodak RAW | KDC · DCR |
+| Mamiya / Phase One RAW | MEF · IIQ |
+| Epson RAW | ERF |
+
+RAW files are fully supported for tagging, rating, notes, EXIF display, rename, and move/copy. Thumbnails and previews show a camera-icon placeholder since Chromium cannot decode proprietary RAW formats natively.
 
 ---
 

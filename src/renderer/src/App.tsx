@@ -13,7 +13,14 @@ interface ElectronFile extends File {
   path: string
 }
 
-const PHOTO_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tiff', '.tif', '.bmp', '.heic'])
+const PHOTO_EXTS = new Set([
+  // Standard web formats
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.tiff', '.tif', '.bmp', '.heic',
+  // RAW formats
+  '.raf', '.cr2', '.cr3', '.nef', '.nrw', '.arw', '.srf', '.sr2',
+  '.orf', '.rw2', '.rwl', '.dng', '.pef', '.x3f', '.3fr', '.raw',
+  '.mrw', '.kdc', '.dcr', '.mef', '.iiq', '.erf',
+])
 
 function getExt(filePath: string): string {
   const dot = filePath.lastIndexOf('.')
