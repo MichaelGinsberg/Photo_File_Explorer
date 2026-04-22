@@ -59,6 +59,39 @@ npm run build:mac
 npm run build
 ```
 
+### Windows Build Troubleshooting
+
+**Error: `Cannot create symbolic link : A required privilege is not held by the client`**
+
+`electron-builder` downloads `winCodeSign-2.6.0.7z` when packaging for Windows. That archive contains macOS OpenSSL symlinks (`libcrypto.dylib`, `libssl.dylib`) that Windows cannot extract without Developer Mode or administrator privileges. The extraction fails with exit code 2 and electron-builder retries four times before aborting — even though all the actual Windows tools inside the archive extracted successfully.
+
+**Fix — pre-populate the cache once, then builds work permanently:**
+
+Run this in PowerShell from the project root:
+
+```powershell
+$cacheDir = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign"
+$targetDir = "$cacheDir\winCodeSign-2.6.0"
+$7za = ".\node_modules\7zip-bin\win\x64\7za.exe"
+$tempArchive = "$cacheDir\winCodeSign-setup.7z"
+
+New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+Invoke-WebRequest -Uri "https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z" -OutFile $tempArchive -UseBasicParsing
+Start-Process -FilePath $7za -ArgumentList "x -bd `"$tempArchive`" `"-o$targetDir`" -y" -PassThru -Wait -NoNewWindow | Out-Null
+
+# Create placeholder files for the two macOS symlinks that Windows can't extract
+foreach ($f in @("$targetDir\darwin\10.12\lib\libcrypto.dylib", "$targetDir\darwin\10.12\lib\libssl.dylib")) {
+    if (-not (Test-Path $f)) { New-Item -Path $f -ItemType File -Force | Out-Null }
+}
+Remove-Item $tempArchive -Force
+```
+
+After running this once, `npm run build:win` finds the pre-populated cache and skips the download/extraction on every subsequent build.
+
+### macOS Build Notes
+
+`npm run build:mac` must be run on macOS — electron-builder rejects it immediately on Windows before downloading anything, so the symlink issue above does not apply. On macOS without an Apple Developer ID certificate, the build will fail at the code-signing step unless signing is disabled. Both the `build:mac` script and the `mac` build config already include `CSC_IDENTITY_AUTO_DISCOVERY=false` / `"sign": null` to skip signing for development builds.
+
 ---
 
 ## Project Structure
@@ -105,41 +138,31 @@ Photo_File_Explorer/
 
 ## Security & Bug Fix Log
 
-All issues found during internal security reviews are documented here.
-
-### Round 1
+All issues found during internal security reviews and build testing are documented here.
 
 | Severity | Area | Issue | Fix |
 |---|---|---|---|
 | High | Security | `sandbox: false` in BrowserWindow — disabled process sandbox for no reason | Changed to `sandbox: true` |
 | High | Security | `window.open()` used for GPS Maps link — opened a new Electron window instead of the system browser | Replaced with `shell.openExternal` via IPC (`shell:openExternal` handler) |
-| Medium | Bug | Move and copy silently overwrote existing files at the destination | Added `destExists()` check before every move/copy; returns an error if destination file already exists |
-| Medium | Performance | `loadExif` listed `exifCache` as a `useCallback` dependency — new reference on every EXIF load triggered cascading re-renders | Introduced `exifCacheRef` (mirrors state); `loadExif` now has an empty dep array and reads via the ref |
-| Low | Bug | `openFolder` had an empty `[]` dep array but called `loadFolder` — missing dependency | Added `[loadFolder]` to the dep array |
-| Low | Performance | Full raw EXIF object (~100+ fields) was serialised and sent over IPC on every panel open but never rendered | Removed `raw` from the IPC response, the `ExifData` type, and the preload interface |
-
-### Round 2
-
-| Severity | Area | Issue | Fix |
-|---|---|---|---|
-| Runtime crash | Bug | `exifCacheRef.current = exifCache` appeared on line 85, but `exifCacheRef` was declared on line 100 — temporal dead zone | Moved both `useRef` declarations above all `useState` calls |
-| Runtime crash | Bug | `openFolder`'s dep array `[loadFolder]` evaluated `loadFolder` before it was declared (`const` TDZ) | Moved `loadFolder` definition above `openFolder` |
-| Type error | Bug | Two EXIF error-path returns still included `{ raw: {} }` after the `raw` field was removed from `ExifData` | Replaced with `{}` |
-| Data loss | Bug | `fs:renameFile` had no destination-exists check — same overwrite risk that was fixed for move/copy | Added `destExists()` guard matching the move/copy pattern |
-
-### Round 3
-
-| Severity | Area | Issue | Fix |
-|---|---|---|---|
 | Security | Protocol | `..` / `.` URL path segments bypassed the extension guard — `localfile:///C%3A/Users/%2E%2E/secret.jpg` could traverse to any `.jpg` outside the photo folder | Reject any decoded path component equal to `..`, `.`, or containing a null byte, before path construction |
 | Security | File system | `fs.stat` follows symlinks — a symlink pointing to a file with a photo extension elsewhere on the system would be listed and served | Changed to `fs.lstat`; symlinks return `isSymbolicLink()`, not `isFile()`, so they are skipped |
 | Security | IPC | `shell:openExternal` URL validation used `startsWith('https://')` — a malformed string can start with `https://` while not being a valid URL | Replaced with `new URL(url)` parser; invalid URLs throw and are rejected |
 | Security | Input | New subfolder name in MoveModal was not validated — entering `../evil` would create a directory outside the chosen destination | Added guard rejecting names containing `/`, `\`, or equal to `..` / `.` |
-| Bug | File ops | Cross-device move: if `copyFile` succeeded but source `unlink` failed, the cleanup code called `unlink(destPath)` — deleting the file that was just successfully copied | Added `fileCopied` flag; cleanup only runs when `copyFile` itself failed |
+| Data loss | Bug | `fs:renameFile` had no destination-exists check — same overwrite risk that was fixed for move/copy | Added `destExists()` guard matching the move/copy pattern |
+| Data loss | Bug | Move and copy silently overwrote existing files at the destination | Added `destExists()` check before every move/copy; returns an error if destination file already exists |
+| Data loss | Bug | Cross-device move: if `copyFile` succeeded but source `unlink` failed, the cleanup code called `unlink(destPath)` — deleting the file that was just successfully copied | Added `fileCopied` flag; cleanup only runs when `copyFile` itself failed |
+| Runtime crash | Bug | `exifCacheRef.current = exifCache` appeared on line 85, but `exifCacheRef` was declared on line 100 — temporal dead zone | Moved both `useRef` declarations above all `useState` calls |
+| Runtime crash | Bug | `openFolder`'s dep array `[loadFolder]` evaluated `loadFolder` before it was declared (`const` TDZ) | Moved `loadFolder` definition above `openFolder` |
+| Type error | Bug | Two EXIF error-path returns still included `{ raw: {} }` after the `raw` field was removed from `ExifData` | Replaced with `{}` |
 | Bug | React | `updatePhotoData` listed `photoData` as a dep — recreated on every photo data change, causing MetadataPanel to re-render on every tag/rating/note save | Added `photoDataRef`; removed `photoData` from deps |
 | Bug | React | MetadataPanel sync effect had `data` in its dep array — updating tags or rating fired the effect and reset unsaved description/notes textarea content | Removed `data` from deps; effect now only fires when `photo?.path` changes |
 | Bug | Logic | `applyBulkPattern` used `d.replace(token, value)` — only replaces the first match; a format like `MM-DD-MM` would leave the second `MM` unreplaced | Changed all six token replacements to `replaceAll` |
-| Hardening | Performance | EXIF parsing had no timeout — a malformed image could hang the main process indefinitely | Wrapped `exifr.parse` in `Promise.race` with an 8-second timeout |
+| Bug | React | `openFolder` had an empty `[]` dep array but called `loadFolder` — missing dependency | Added `[loadFolder]` to the dep array |
+| Build failure | Toolchain | `winCodeSign-2.6.0.7z` contains macOS OpenSSL symlinks (`libcrypto.dylib`, `libssl.dylib`) that Windows cannot extract without Developer Mode or admin privileges — 7-Zip exits with code 2 and `electron-builder` aborts after four retries | Pre-populate the cache at `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0\` by extracting the archive once (ignoring the symlink errors) and creating empty placeholder files for the two missing symlinks; subsequent builds find the cache directory and skip the download entirely. `build:win` script updated to pass `CSC_IDENTITY_AUTO_DISCOVERY=false` via `cross-env` |
+| Build failure | Toolchain | `build:mac` without an Apple Developer ID certificate fails at the code-signing step because `CSC_IDENTITY_AUTO_DISCOVERY=true` by default causes electron-builder to require a signing identity | Added `CSC_IDENTITY_AUTO_DISCOVERY=false` via `cross-env` to `build:mac` and `"sign": null` to the mac build config, matching the treatment applied to `build:win` |
+| Performance | React | `loadExif` listed `exifCache` as a `useCallback` dependency — new reference on every EXIF load triggered cascading re-renders | Introduced `exifCacheRef` (mirrors state); `loadExif` now has an empty dep array and reads via the ref |
+| Performance | IPC | Full raw EXIF object (~100+ fields) was serialised and sent over IPC on every panel open but never rendered | Removed `raw` from the IPC response, the `ExifData` type, and the preload interface |
+| Performance | Main process | EXIF parsing had no timeout — a malformed image could hang the main process indefinitely | Wrapped `exifr.parse` in `Promise.race` with an 8-second timeout |
 
 ---
 

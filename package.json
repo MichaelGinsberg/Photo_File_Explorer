@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && electron-builder",
-    "build:win": "electron-vite build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:win": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
+    "build:mac": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
     "preview": "electron-vite preview"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "cross-env": "^10.1.0",
     "electron": "^31.7.7",
     "electron-builder": "^24.13.3",
     "electron-vite": "^2.3.0",
@@ -39,6 +40,8 @@
       "dist/**"
     ],
     "win": {
+      "sign": null,
+      "signingHashAlgorithms": null,
       "target": [
         "nsis",
         "portable"
@@ -46,6 +49,7 @@
       "icon": "resources/icon.ico"
     },
     "mac": {
+      "sign": null,
       "target": [
         "dmg",
         "zip"
