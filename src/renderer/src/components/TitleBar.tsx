@@ -1,5 +1,6 @@
 import React from 'react'
 import { useApp } from '../context/AppContext'
+import appIconUrl from '../assets/app-icon.svg?url'
 
 export default function TitleBar() {
   const { platform } = useApp()
@@ -12,7 +13,7 @@ export default function TitleBar() {
     >
       {/* Left: App icon + title */}
       <div className="title-bar-left">
-        <span className="title-bar-icon">📷</span>
+        <img src={appIconUrl} className="title-bar-icon" alt="" />
         <span className="title-bar-title">Photo File Explorer</span>
       </div>
 

@@ -10,52 +10,44 @@ const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
 
-// Nord-themed camera icon.
-// Viewbox 512x512: dark rounded-square bg, camera body, multi-ring lens assembly.
-const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Background rounded square -->
-  <rect width="512" height="512" rx="96" fill="#2E3440"/>
+// App icon — Nord-themed camera with gradient lens.
+// Viewbox 1024x1024: blue-gradient rounded square, camera body with viewfinder,
+// gradient photo lens, landscape scene highlight, and red notification dot.
+const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5E81AC"/>
+      <stop offset="1" stop-color="#3B4252"/>
+    </linearGradient>
+    <linearGradient id="photo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EBCB8B"/>
+      <stop offset="0.55" stop-color="#D08770"/>
+      <stop offset="1" stop-color="#B48EAD"/>
+    </linearGradient>
+    <radialGradient id="lensGlow" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#ECEFF4" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ECEFF4" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="lc"><circle cx="512" cy="560" r="160"/></clipPath>
+  </defs>
 
-  <!-- Camera body -->
-  <rect x="52" y="176" width="408" height="268" rx="32" fill="#3B4252"/>
+  <rect x="64" y="64" width="896" height="896" rx="210" fill="url(#base)"/>
 
-  <!-- Viewfinder bump (top-center) -->
-  <path d="M174,176 L174,132 Q174,112 194,112 L318,112 Q338,112 338,132 L338,176 Z"
-        fill="#3B4252"/>
+  <g transform="translate(512 540)">
+    <path d="M -330,-180 Q -330,-230 -280,-230 L -170,-230 L -140,-275 L 140,-275 L 170,-230 L 280,-230 Q 330,-230 330,-180 L 330,210 Q 330,260 280,260 L -280,260 Q -330,260 -330,210 Z" fill="#2E3440"/>
+    <circle cx="0" cy="20" r="215" fill="#3B4252"/>
+    <circle cx="0" cy="20" r="215" fill="none" stroke="#4C566A" stroke-width="8"/>
+    <circle cx="0" cy="20" r="160" fill="url(#photo)"/>
+    <g clip-path="url(#lc)" transform="translate(-512 -540)">
+      <path d="M 352,610 L 442,530 L 512,590 L 582,520 L 672,580 L 672,740 L 352,740 Z" fill="#4C566A" opacity="0.7"/>
+      <circle cx="562" cy="510" r="38" fill="#EBCB8B"/>
+    </g>
+    <circle cx="0" cy="20" r="160" fill="url(#lensGlow)"/>
+    <path d="M -90,-55 Q 0,-120 90,-55" fill="none" stroke="#ECEFF4" stroke-width="9" stroke-linecap="round" opacity="0.4"/>
+    <circle cx="240" cy="-252" r="16" fill="#BF616A"/>
+  </g>
 
-  <!-- Shutter button -->
-  <circle cx="406" cy="148" r="26" fill="#4C566A"/>
-  <circle cx="406" cy="148" r="14" fill="#88C0D0" opacity="0.7"/>
-
-  <!-- Flash LED -->
-  <rect x="88" y="130" width="48" height="28" rx="8" fill="#4C566A"/>
-  <rect x="96" y="136" width="32" height="16" rx="4" fill="#EBCB8B" opacity="0.5"/>
-
-  <!-- Lens bezel (outermost ring - shadow) -->
-  <circle cx="256" cy="316" r="118" fill="#2E3440"/>
-
-  <!-- Lens housing ring -->
-  <circle cx="256" cy="316" r="106" fill="#4C566A"/>
-
-  <!-- Lens glass (blue) -->
-  <circle cx="256" cy="316" r="88" fill="#5E81AC"/>
-
-  <!-- Mid lens ring -->
-  <circle cx="256" cy="316" r="68" fill="#4C566A"/>
-
-  <!-- Pupil -->
-  <circle cx="256" cy="316" r="50" fill="#2E3440"/>
-
-  <!-- Center highlight -->
-  <circle cx="256" cy="316" r="24" fill="#88C0D0" opacity="0.85"/>
-
-  <!-- Lens glass shine (top-left, rotated ellipse) -->
-  <ellipse cx="214" cy="274" rx="28" ry="16" fill="white" opacity="0.13"
-           transform="rotate(-35 214 274)"/>
-
-  <!-- Tick marks ring on lens housing -->
-  <circle cx="256" cy="316" r="98" fill="none" stroke="#88C0D0"
-          stroke-width="2" stroke-dasharray="5 18" opacity="0.35"/>
+  <rect x="65" y="65" width="894" height="894" rx="209" fill="none" stroke="#000" stroke-opacity="0.4" stroke-width="2"/>
 </svg>`;
 
 // ── ICO builder ──────────────────────────────────────────────────────────────
