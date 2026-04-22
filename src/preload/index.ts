@@ -115,6 +115,12 @@ const api = {
   readSubdirectories: (dirPath: string): Promise<ApiResponse<string[]>> =>
     ipcRenderer.invoke('fs:readSubdirectories', dirPath),
 
+  moveFolder: (oldPath: string, newPath: string): Promise<ApiResponse<string>> =>
+    ipcRenderer.invoke('fs:moveFolder', oldPath, newPath),
+
+  renameFolderPath: (oldPrefix: string, newPrefix: string): Promise<ApiResponse<undefined>> =>
+    ipcRenderer.invoke('store:renameFolderPath', oldPrefix, newPrefix),
+
   // Tag groups
   getTagGroups: (): Promise<ApiResponse<TagGroup[]>> =>
     ipcRenderer.invoke('store:getTagGroups'),

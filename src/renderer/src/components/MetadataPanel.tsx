@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
 import { RAW_EXTS } from '../rawFormats'
+import { suggestTags, getModelStatus } from '../services/tagSuggestion'
 
 function buildLocalFileUrl(filePath: string): string {
   return `localfile://localhost/?p=${encodeURIComponent(filePath)}`
@@ -80,14 +81,50 @@ export default function MetadataPanel() {
       .slice(0, 8)
   }, [newTag, allTags, data])
 
-  // Top 5 most-used tags not already on this photo
-  const topTags = useMemo(() => {
-    if (!data) return []
-    return [...allTags]
-      .sort((a, b) => b.count - a.count)
-      .filter(t => !data.tags.includes(t.name))
-      .slice(0, 5)
-  }, [allTags, data])
+  // ── AI tag suggestions ──────────────────────────────────────────────────────
+  // Raw suggestions from the last completed analysis. We filter out already-
+  // applied tags at render time so they disappear immediately when the user
+  // clicks one — without re-running inference.
+
+  const [rawSuggestions, setRawSuggestions] = useState<string[]>([])
+  const [isSuggesting, setIsSuggesting] = useState(false)
+  const [modelReady, setModelReady] = useState(getModelStatus() === 'ready')
+  const cancelSuggRef = useRef(false)
+
+  useEffect(() => {
+    if (!photo) { setRawSuggestions([]); return }
+
+    cancelSuggRef.current = false
+    setRawSuggestions([])
+    // Compute isRaw here — the outer isRaw is declared after the early-return guard
+    const photoIsRaw = RAW_EXTS.has(photo.extension)
+    // Don't show spinner for RAW files (classification always fails for them)
+    if (!photoIsRaw) setIsSuggesting(true)
+
+    const url = photoIsRaw ? undefined : buildLocalFileUrl(photo.path)
+
+    suggestTags(url, photoData, photo.path, data?.tags ?? [])
+      .then(results => {
+        if (cancelSuggRef.current) return
+        setRawSuggestions(results)
+        setModelReady(true)
+        setIsSuggesting(false)
+      })
+      .catch(() => {
+        if (cancelSuggRef.current) return
+        setRawSuggestions([])
+        setIsSuggesting(false)
+      })
+
+    return () => { cancelSuggRef.current = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photo?.path])
+
+  // Filter out any tags the user has since applied — no need to re-run ML
+  const aiSuggestions = useMemo(
+    () => rawSuggestions.filter(t => !data?.tags.includes(t)),
+    [rawSuggestions, data?.tags]
+  )
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -284,25 +321,30 @@ export default function MetadataPanel() {
         <div className="metadata-section">
           <div className="metadata-section-title">Tags</div>
 
-          {/* Top used tags (quick-add) */}
-          {topTags.length > 0 && (
+          {/* AI-suggested tags */}
+          {isSuggesting ? (
+            <div className="suggestion-status">
+              <span className="suggestion-spinner" />
+              {modelReady ? 'Analyzing image…' : 'Loading AI model…'}
+            </div>
+          ) : aiSuggestions.length > 0 ? (
             <div className="top-tags">
-              {topTags.map(tag => {
-                const color = tagColorMap[tag.name] ?? DEFAULT_TAG_COLOR
+              {aiSuggestions.map((tag: string) => {
+                const color = tagColorMap[tag] ?? DEFAULT_TAG_COLOR
                 return (
                   <button
-                    key={tag.name}
-                    className="top-tag-chip"
+                    key={tag}
+                    className="top-tag-chip suggestion-chip"
                     style={{ borderColor: color, color }}
-                    onClick={() => handleTopTagClick(tag.name)}
-                    title={`Add "${tag.name}" · used ${tag.count}×`}
+                    onClick={() => handleTopTagClick(tag)}
+                    title={`AI suggestion: "${tag}"`}
                   >
-                    + {tag.name}
+                    ✦ {tag}
                   </button>
                 )
               })}
             </div>
-          )}
+          ) : null}
 
           {/* Applied tags */}
           <div className="tag-chips">

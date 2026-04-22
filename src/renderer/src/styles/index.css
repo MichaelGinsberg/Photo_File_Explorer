@@ -699,6 +699,48 @@ a {
   background: var(--nord2);
 }
 
+.context-menu-separator {
+  height: 1px;
+  background: var(--nord3);
+  margin: 3px 6px;
+}
+
+/* Inline rename confirm / cancel buttons */
+.rename-confirm-btn,
+.rename-cancel-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+}
+
+.rename-confirm-btn {
+  background: var(--nord14);
+  color: var(--nord0);
+}
+
+.rename-confirm-btn:hover {
+  background: #b2cf9e;
+}
+
+.rename-cancel-btn {
+  background: var(--nord3);
+  color: var(--nord4);
+}
+
+.rename-cancel-btn:hover {
+  background: var(--nord11);
+  color: white;
+}
+
 /* ─── Photo Grid ─────────────────────────────────────────────────────────────── */
 .photo-grid {
   display: grid;
@@ -1280,6 +1322,38 @@ a {
 .top-tag-chip:hover {
   border-style: solid;
   opacity: 1;
+}
+
+/* AI suggestion chips — same base as top-tag-chip, slightly distinct */
+.suggestion-chip {
+  border-style: solid;
+  opacity: 0.9;
+}
+
+/* Suggestion loading row */
+.suggestion-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--nord3);
+  padding: 3px 0 6px;
+}
+
+/* CSS-only pulsing spinner */
+.suggestion-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--nord3);
+  border-top-color: var(--nord8);
+  border-radius: 50%;
+  animation: suggestion-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes suggestion-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Date field */

@@ -626,6 +626,61 @@ ipcMain.handle('fs:readSubdirectories', async (_event, dirPath: string) => {
   }
 })
 
+ipcMain.handle('fs:moveFolder', async (_event, oldPath: string, newPath: string) => {
+  try {
+    if (typeof oldPath !== 'string' || typeof newPath !== 'string' ||
+        !path.isAbsolute(oldPath) || !path.isAbsolute(newPath)) {
+      return { success: false, error: 'Paths must be absolute' }
+    }
+    if (oldPath === newPath) return { success: true, data: newPath }
+    // Prevent moving a folder into itself or a descendant
+    const oldNorm = oldPath.endsWith(path.sep) ? oldPath : oldPath + path.sep
+    const newNorm = newPath.endsWith(path.sep) ? newPath : newPath + path.sep
+    if (newNorm.startsWith(oldNorm)) {
+      return { success: false, error: 'Cannot move a folder into itself' }
+    }
+    const stat = await fs.promises.lstat(oldPath).catch(() => null)
+    if (!stat || !stat.isDirectory()) {
+      return { success: false, error: 'Source is not a directory' }
+    }
+    if (await destExists(newPath)) {
+      return { success: false, error: `"${path.basename(newPath)}" already exists at this location` }
+    }
+    await fs.promises.rename(oldPath, newPath)
+    return { success: true, data: newPath }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+// Migrate ALL stored photo records whose path begins with oldPrefix to newPrefix.
+// Called after a folder is renamed or moved so metadata follows photos to their new location.
+ipcMain.handle('store:renameFolderPath', (_event, oldPrefix: string, newPrefix: string) => {
+  try {
+    if (!path.isAbsolute(oldPrefix) || !path.isAbsolute(newPrefix)) {
+      return { success: false, error: 'Paths must be absolute' }
+    }
+    const photos = store.get('photos') as Record<string, PhotoData>
+    const sep = path.sep
+    const prefixWithSep = oldPrefix.endsWith(sep) ? oldPrefix : oldPrefix + sep
+    const newPrefixWithSep = newPrefix.endsWith(sep) ? newPrefix : newPrefix + sep
+    const updated: Record<string, PhotoData> = {}
+    let changed = false
+    for (const [key, value] of Object.entries(photos)) {
+      if (key.startsWith(prefixWithSep)) {
+        updated[newPrefixWithSep + key.slice(prefixWithSep.length)] = value
+        changed = true
+      } else {
+        updated[key] = value
+      }
+    }
+    if (changed) store.set('photos', updated)
+    return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
 // Migrate stored photo data when a file is renamed or moved.
 // Moves the data record from oldPath to newPath without touching allTags
 // counts (the tags themselves don't change, only the path key does).

@@ -19,6 +19,7 @@ A cross-platform desktop application for browsing, tagging, and organizing photo
 | **Custom tags** | Add, remove, and filter by tags; persisted across sessions |
 | **Tag autocomplete** | Typing in the tag field shows a live filtered dropdown of existing tags (with usage counts); navigate with arrow keys, confirm with Enter |
 | **Quick-add tags** | The 5 most-used tags appear as one-click chips above the tag input for fast tagging |
+| **AI tag suggestions** | When a photo is selected, a local MobileNet-v2 model classifies the image and suggests up to 8 tags; suggestions blend ML-detected labels with tags from visually similar already-tagged photos; runs entirely on-device via ONNX Runtime WASM — no data leaves the machine; model (~14 MB) is downloaded once on first use and cached permanently |
 | **Ratings & notes** | 5-star rating, description, and freeform notes per photo |
 | **Date Taken** | User-editable date field (YYYY-MM-DD) per photo; one-click fill from EXIF date when available; used as a sort key |
 | **Location** | Freeform location text per photo (e.g. "Paris, France"); GPS coordinates shown inline with a Maps link when EXIF data is present; used as a sort key |

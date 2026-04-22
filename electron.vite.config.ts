@@ -42,6 +42,11 @@ export default defineConfig({
       alias: {
         '@': resolve(__dirname, 'src/renderer/src')
       }
+    },
+    // @xenova/transformers dynamically imports ONNX WASM files at runtime
+    // from the CDN; pre-bundling it breaks those dynamic import paths.
+    optimizeDeps: {
+      exclude: ['@xenova/transformers']
     }
   }
 })
