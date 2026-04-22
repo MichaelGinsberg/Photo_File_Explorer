@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react'
+import React, { useRef, useState, useEffect, useCallback, memo } from 'react'
 import type { Photo } from '../types'
 import { RAW_EXTS } from '../rawFormats'
 
@@ -10,6 +10,18 @@ interface PhotoItemProps {
   viewMode: 'grid' | 'list'
   onSelect: (photo: Photo, event: React.MouseEvent) => void
   onActivate: (photo: Photo) => void
+}
+
+function RawThumb({ extension }: { extension: string }) {
+  return (
+    <div className="raw-placeholder">
+      <svg className="raw-placeholder-icon" width="22" height="22" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M10.5 8.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+        <path d="M2 4a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1.172a2 2 0 01-1.414-.586l-.828-.828A2 2 0 009.172 2H6.828a2 2 0 00-1.414.586l-.828.828A2 2 0 013.172 4H2zm.5 2a.5.5 0 110-1 .5.5 0 010 1zm9 2.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z"/>
+      </svg>
+      <span className="raw-placeholder-ext">{extension}</span>
+    </div>
+  )
 }
 
 function buildLocalFileUrl(filePath: string): string {
@@ -30,7 +42,7 @@ function formatDate(ts: number): string {
   })
 }
 
-export default function PhotoItem({
+function PhotoItem({
   photo,
   isSelected,
   isActive,
@@ -93,16 +105,6 @@ export default function PhotoItem({
   const isRaw = RAW_EXTS.has(photo.extension)
   const imageUrl = (visible && !isRaw) ? buildLocalFileUrl(photo.path) : undefined
 
-  const RawThumb = () => (
-    <div className="raw-placeholder">
-      <svg className="raw-placeholder-icon" width="22" height="22" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M10.5 8.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
-        <path d="M2 4a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1.172a2 2 0 01-1.414-.586l-.828-.828A2 2 0 009.172 2H6.828a2 2 0 00-1.414.586l-.828.828A2 2 0 013.172 4H2zm.5 2a.5.5 0 110-1 .5.5 0 010 1zm9 2.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z"/>
-      </svg>
-      <span className="raw-placeholder-ext">{photo.extension}</span>
-    </div>
-  )
-
   if (viewMode === 'list') {
     return (
       <div
@@ -113,7 +115,7 @@ export default function PhotoItem({
       >
         <div className="photo-list-thumb">
           {isRaw ? (
-            <RawThumb />
+            <RawThumb extension={photo.extension} />
           ) : visible && !error ? (
             <img
               ref={imgRef}
@@ -155,7 +157,7 @@ export default function PhotoItem({
       {/* Thumbnail */}
       <div className="photo-thumb">
         {isRaw ? (
-          <RawThumb />
+          <RawThumb extension={photo.extension} />
         ) : visible && !error ? (
           <img
             ref={imgRef}
@@ -198,3 +200,5 @@ export default function PhotoItem({
     </div>
   )
 }
+
+export default memo(PhotoItem)

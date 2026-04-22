@@ -202,10 +202,10 @@ export default function Sidebar() {
     const counts: Record<string, number> = {}
     for (const group of tagGroups) {
       if (group.tags.length === 0) { counts[group.id] = 0; continue }
+      const groupTagSet = new Set(group.tags)
       counts[group.id] = photos.filter(photo => {
-        const data = photoData[photo.path]
-        if (!data?.tags) return false
-        return group.tags.some(t => data.tags.includes(t))
+        const tags = photoData[photo.path]?.tags
+        return !!tags && tags.some(t => groupTagSet.has(t))
       }).length
     }
     return counts

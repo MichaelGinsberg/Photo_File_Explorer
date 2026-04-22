@@ -285,6 +285,9 @@ const PHOTO_EXTENSIONS = new Set([
 
 ipcMain.handle('fs:readDirectory', async (_event, dirPath: string) => {
   try {
+    if (typeof dirPath !== 'string' || !path.isAbsolute(dirPath)) {
+      return { success: false, error: 'Path must be absolute' }
+    }
     const entries = await fs.promises.readdir(dirPath)
 
     // Filter by extension first (no I/O), then stat all candidates in parallel.
@@ -318,6 +321,13 @@ ipcMain.handle('fs:readDirectory', async (_event, dirPath: string) => {
 
 ipcMain.handle('fs:getExifData', async (_event, filePath: string) => {
   try {
+    if (typeof filePath !== 'string' || !path.isAbsolute(filePath)) {
+      return { success: false, error: 'Path must be absolute', data: {} }
+    }
+    const ext = path.extname(filePath).toLowerCase()
+    if (!PHOTO_EXTENSIONS.has(ext)) {
+      return { success: false, error: 'Invalid file type', data: {} }
+    }
     // Use pre-warmed module if available, otherwise import and cache now
     const exifr = exifrLib ?? (exifrLib = await import('exifr'))
     const raw = await Promise.race([
@@ -388,17 +398,15 @@ async function destExists(p: string): Promise<boolean> {
 }
 
 ipcMain.handle('fs:moveFiles', async (_event, filePaths: string[], destDir: string) => {
-  const results: { path: string; success: boolean; error?: string; newPath?: string }[] = []
-  for (const filePath of filePaths) {
+  const results = await Promise.all(filePaths.map(async (filePath) => {
     const fileName = path.basename(filePath)
     const destPath = path.join(destDir, fileName)
     if (await destExists(destPath)) {
-      results.push({ path: filePath, success: false, error: `File already exists at destination: ${fileName}` })
-      continue
+      return { path: filePath, success: false, error: `File already exists at destination: ${fileName}` }
     }
     try {
       await fs.promises.rename(filePath, destPath)
-      results.push({ path: filePath, success: true, newPath: destPath })
+      return { path: filePath, success: true, newPath: destPath }
     } catch {
       // Cross-device move: copy then delete
       let fileCopied = false
@@ -406,44 +414,45 @@ ipcMain.handle('fs:moveFiles', async (_event, filePaths: string[], destDir: stri
         await fs.promises.copyFile(filePath, destPath)
         fileCopied = true
         await fs.promises.unlink(filePath)
-        results.push({ path: filePath, success: true, newPath: destPath })
+        return { path: filePath, success: true, newPath: destPath }
       } catch (err2: any) {
         if (!fileCopied) {
           // copyFile failed — clean up any partial dest write
           try { await fs.promises.unlink(destPath) } catch { /* best effort */ }
-          results.push({ path: filePath, success: false, error: err2.message })
+          return { path: filePath, success: false, error: err2.message as string }
         } else {
           // copyFile succeeded but unlink failed — dest has the file; don't delete it
-          results.push({ path: filePath, success: false,
-            error: `File copied but source could not be deleted: ${err2.message}` })
+          return { path: filePath, success: false,
+            error: `File copied but source could not be deleted: ${err2.message}` }
         }
       }
     }
-  }
+  }))
   return { success: true, data: results }
 })
 
 ipcMain.handle('fs:copyFiles', async (_event, filePaths: string[], destDir: string) => {
-  const results: { path: string; success: boolean; error?: string; newPath?: string }[] = []
-  for (const filePath of filePaths) {
+  const results = await Promise.all(filePaths.map(async (filePath) => {
     const fileName = path.basename(filePath)
     const destPath = path.join(destDir, fileName)
     if (await destExists(destPath)) {
-      results.push({ path: filePath, success: false, error: `File already exists at destination: ${fileName}` })
-      continue
+      return { path: filePath, success: false, error: `File already exists at destination: ${fileName}` }
     }
     try {
       await fs.promises.copyFile(filePath, destPath)
-      results.push({ path: filePath, success: true, newPath: destPath })
+      return { path: filePath, success: true, newPath: destPath }
     } catch (err: any) {
-      results.push({ path: filePath, success: false, error: err.message })
+      return { path: filePath, success: false, error: err.message as string }
     }
-  }
+  }))
   return { success: true, data: results }
 })
 
 ipcMain.handle('fs:createDirectory', async (_event, dirPath: string) => {
   try {
+    if (typeof dirPath !== 'string' || !path.isAbsolute(dirPath) || dirPath.includes('\0')) {
+      return { success: false, error: 'Invalid directory path' }
+    }
     await fs.promises.mkdir(dirPath, { recursive: true })
     return { success: true, data: dirPath }
   } catch (err: any) {
@@ -581,9 +590,31 @@ ipcMain.handle('store:getTagGroups', () => {
   }
 })
 
-ipcMain.handle('store:setTagGroups', (_event, groups: TagGroup[]) => {
+ipcMain.handle('store:setTagGroups', (_event, groups: unknown) => {
   try {
-    store.set('tagGroups', groups)
+    if (!Array.isArray(groups)) {
+      return { success: false, error: 'Groups must be an array' }
+    }
+    for (const g of groups) {
+      if (typeof g !== 'object' || g === null || Array.isArray(g)) {
+        return { success: false, error: 'Invalid group' }
+      }
+      const group = g as Record<string, unknown>
+      if (typeof group.id !== 'string' || !/^group_\d+$/.test(group.id)) {
+        return { success: false, error: 'Invalid group id' }
+      }
+      if (typeof group.name !== 'string' || group.name.length === 0 || group.name.length > 100) {
+        return { success: false, error: 'Invalid group name' }
+      }
+      if (!Array.isArray(group.tags) || group.tags.length > 500 ||
+          group.tags.some((t: unknown) => typeof t !== 'string' || (t as string).length > 200)) {
+        return { success: false, error: 'Invalid group tags' }
+      }
+      if (typeof group.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(group.color)) {
+        return { success: false, error: 'Invalid group color' }
+      }
+    }
+    store.set('tagGroups', groups as TagGroup[])
     return { success: true }
   } catch (err: any) {
     return { success: false, error: err.message }

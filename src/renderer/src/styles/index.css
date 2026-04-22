@@ -795,6 +795,7 @@ a {
   background: var(--nord2);
   transition: transform var(--transition), box-shadow var(--transition);
   border: 2px solid transparent;
+  will-change: transform, opacity;
 }
 
 .photo-item:hover {
@@ -824,6 +825,7 @@ a {
   object-fit: cover;
   opacity: 0;
   transition: opacity 0.2s ease;
+  will-change: opacity;
 }
 
 .photo-img.loaded {

@@ -93,6 +93,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const lastClickedPath = useRef<string | null>(null)
   const exifCacheRef = useRef<Record<string, ExifData>>({})
   const photoDataRef = useRef<Record<string, PhotoData>>({})
+  const filteredPhotosRef = useRef<Photo[]>([])
 
   const [currentFolder, setCurrentFolder] = useState<string | null>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -168,9 +169,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Filter by selected tags (AND — photo must have every selected tag)
     if (filterTags.length > 0) {
       list = list.filter((photo) => {
-        const data = photoData[photo.path]
-        if (!data || !data.tags) return false
-        return filterTags.every((tag) => data.tags.includes(tag))
+        const tags = photoData[photo.path]?.tags
+        if (!tags) return false
+        const tagSet = new Set(tags)
+        return filterTags.every((tag) => tagSet.has(tag))
       })
     }
 
@@ -178,10 +180,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (activeGroupId) {
       const group = tagGroups.find(g => g.id === activeGroupId)
       if (group && group.tags.length > 0) {
+        const groupTagSet = new Set(group.tags)
         list = list.filter((photo) => {
-          const data = photoData[photo.path]
-          if (!data?.tags) return false
-          return group.tags.some(t => data.tags.includes(t))
+          const tags = photoData[photo.path]?.tags
+          return !!tags && tags.some(t => groupTagSet.has(t))
         })
       }
     }
@@ -208,6 +210,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return list
   }, [photos, photoData, filterTags, activeGroupId, tagGroups, sortBy, sortDir])
+
+  filteredPhotosRef.current = filteredPhotos
 
   // ─── loadFolder (must be defined before openFolder) ───────────────────────
 
@@ -282,8 +286,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const path = photo.path
 
       if (event.shiftKey && lastClickedPath.current) {
-        // Shift+click: range selection
-        const paths = filteredPhotos.map((p) => p.path)
+        // Shift+click: range selection — read via ref so this callback stays stable
+        const paths = filteredPhotosRef.current.map((p) => p.path)
         const lastIdx = paths.indexOf(lastClickedPath.current)
         const currIdx = paths.indexOf(path)
         if (lastIdx !== -1 && currIdx !== -1) {
@@ -311,14 +315,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setActivePhotoState(photo)
       }
     },
-    [filteredPhotos]
+    [] // stable — reads filteredPhotos via ref
   )
 
   // ─── selectAll / deselectAll ───────────────────────────────────────────────
 
   const selectAll = useCallback(() => {
-    setSelectedPaths(new Set(filteredPhotos.map((p) => p.path)))
-  }, [filteredPhotos])
+    setSelectedPaths(new Set(filteredPhotosRef.current.map((p) => p.path)))
+  }, []) // stable — reads via ref
 
   const deselectAll = useCallback(() => {
     setSelectedPaths(new Set())
@@ -469,8 +473,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const succeeded = res.data.filter((r) => r.success)
       const failed = res.data.filter((r) => !r.success)
 
-      // Migrate store metadata to the new path so it survives in the destination folder
-      await Promise.all(
+      // Migrate store metadata to the new path so it survives in the destination folder.
+      // allSettled so a single metadata failure doesn't abort the rest.
+      await Promise.allSettled(
         succeeded
           .filter((r) => r.newPath)
           .map((r) => window.api.renamePhotoPath(r.path, r.newPath!))

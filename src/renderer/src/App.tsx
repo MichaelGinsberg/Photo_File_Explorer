@@ -28,8 +28,8 @@ function getExt(filePath: string): string {
 }
 
 function StatusBar() {
-  const { filteredPhotos, selectedPaths, photos, filterTags } = useApp()
-  const filtered = filterTags.length > 0
+  const { filteredPhotos, selectedPaths, photos, filterTags, activeGroupId, tagGroups } = useApp()
+  const filtered = filterTags.length > 0 || activeGroupId !== null
 
   return (
     <div className="status-bar">
@@ -43,9 +43,14 @@ function StatusBar() {
           {selectedPaths.size} selected
         </span>
       )}
-      {filtered && (
+      {filterTags.length > 0 && (
         <span className="status-bar-item">
           Filtered by: {filterTags.join(', ')}
+        </span>
+      )}
+      {activeGroupId !== null && (
+        <span className="status-bar-item">
+          Group: {tagGroups.find(g => g.id === activeGroupId)?.name ?? activeGroupId}
         </span>
       )}
     </div>

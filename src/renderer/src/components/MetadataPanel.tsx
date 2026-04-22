@@ -89,34 +89,35 @@ export default function MetadataPanel() {
   const [rawSuggestions, setRawSuggestions] = useState<string[]>([])
   const [isSuggesting, setIsSuggesting] = useState(false)
   const [modelReady, setModelReady] = useState(getModelStatus() === 'ready')
-  const cancelSuggRef = useRef(false)
 
   useEffect(() => {
     if (!photo) { setRawSuggestions([]); return }
 
-    cancelSuggRef.current = false
+    // Use a closure-local flag instead of a shared ref — the shared ref approach
+    // has a race: when the user switches photos, the cleanup sets the flag to true,
+    // but the next effect immediately resets it to false before the old promise
+    // resolves, allowing it to overwrite the new photo's results.
+    let cancelled = false
     setRawSuggestions([])
-    // Compute isRaw here — the outer isRaw is declared after the early-return guard
     const photoIsRaw = RAW_EXTS.has(photo.extension)
-    // Don't show spinner for RAW files (classification always fails for them)
     if (!photoIsRaw) setIsSuggesting(true)
 
     const url = photoIsRaw ? undefined : buildLocalFileUrl(photo.path)
 
     suggestTags(url, photoData, photo.path, data?.tags ?? [])
       .then(results => {
-        if (cancelSuggRef.current) return
+        if (cancelled) return
         setRawSuggestions(results)
         setModelReady(true)
         setIsSuggesting(false)
       })
       .catch(() => {
-        if (cancelSuggRef.current) return
+        if (cancelled) return
         setRawSuggestions([])
         setIsSuggesting(false)
       })
 
-    return () => { cancelSuggRef.current = true }
+    return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photo?.path])
 
@@ -145,7 +146,7 @@ export default function MetadataPanel() {
     if (!photo || !data || !newTag.trim()) return
     // Normalise: lowercase, collapse whitespace, strip control characters
     const tag = newTag.trim().toLowerCase().replace(/[\x00-\x1f\x7f]/g, '').replace(/\s+/g, ' ')
-    if (!tag) return
+    if (!tag || tag.length > 200) return
     if (!data.tags.includes(tag)) {
       updatePhotoData(photo.path, { tags: [...data.tags, tag] })
     }
