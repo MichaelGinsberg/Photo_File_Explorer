@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 56" width="420" height="56">
+  <rect width="420" height="56" rx="10" fill="#3B4252"></rect>
+  <g transform="translate(18,12)">
+    <rect width="32" height="32" rx="7" fill="#BF616A"></rect>
+    <g transform="translate(16,17)" fill="white" stroke="none">
+      <path d="M0,7 C-8,1 -9,-4 -5,-7 C-2,-9 0,-7 0,-4 C0,-7 2,-9 5,-7 C9,-4 8,1 0,7 Z"></path>
+    </g>
+  </g>
+  <text x="62" y="34" font-family="-apple-system,Segoe UI,sans-serif" font-size="20" font-weight="700" fill="#ECEFF4" letter-spacing="-0.2">Support</text>
+  <line x1="62" y1="42" x2="100" y2="42" stroke="#BF616A" stroke-width="2" stroke-linecap="round"></line>
+</svg>

@@ -9,30 +9,30 @@ A cross-platform desktop application for browsing, tagging, and organizing photo
 
 ---
 
-## Features
+<br>
+
+![Features](docs/section-features.svg)
 
 | Feature | Details |
 |---|---|
 | **Photo browsing** | Open any local folder and view photos as a thumbnail grid or list; active folder shown in the sidebar with one-click re-open |
 | **Lazy loading** | IntersectionObserver-based loading — only visible images are fetched |
 | **EXIF display** | Camera make/model/lens, exposure settings, GPS with Maps link, date taken — auto-loaded when a photo is selected |
-| **Custom tags** | Add, remove, and filter by tags; persisted across sessions |
-| **Tag autocomplete** | Typing in the tag field shows a live filtered dropdown of existing tags (with usage counts); navigate with arrow keys, confirm with Enter |
-| **Quick-add tags** | The 5 most-used tags appear as one-click chips above the tag input for fast tagging |
-| **AI tag suggestions** | When a photo is selected, a local MobileNet-v2 model classifies the image and suggests up to 8 tags; suggestions blend ML-detected labels with tags from visually similar already-tagged photos; runs entirely on-device via ONNX Runtime WASM — no data leaves the machine; model (~14 MB) is downloaded once on first use and cached permanently |
 | **Ratings & notes** | 5-star rating, description, and freeform notes per photo |
 | **Date Taken** | User-editable date field (YYYY-MM-DD) per photo; one-click fill from EXIF date when available; used as a sort key |
 | **Location** | Freeform location text per photo (e.g. "Paris, France"); GPS coordinates shown inline with a Maps link when EXIF data is present; used as a sort key |
 | **Multi-selection** | Click, Ctrl+Click, Shift+Click (range), Ctrl+A (all), Escape (clear) |
 | **Sort & filter** | Sort by name, date modified, date taken, file size, or location; filter by one or more tags |
-| **Rename** | Single rename or bulk rename with pattern variables (`{name}`, `{counter:3}`, `{date:YYYY-MM-DD}`) |
 | **Move & copy** | Move or copy selected photos to any folder, with optional new subfolder creation |
 | **Drag & drop** | Drag photo files from Windows Explorer or Finder directly onto the photo grid to copy them into the current folder; a visual overlay confirms the drop target and a toast reports the result |
-| **Tag groups** | Create named groups that bundle multiple tags together; clicking a group in the sidebar filters the grid to photos that have any one of the group's tags (OR logic); groups are created and edited via a modal with a tag picker; group match counts update live |
 | **Nord theme** | Full Nord dark palette throughout the UI |
 | **Native window** | Custom frameless title bar on Windows; native traffic lights on macOS |
 
-**Supported formats:**
+<br>
+
+![RAW Support](docs/section-raw.svg)
+
+RAW files are fully supported for tagging, rating, notes, EXIF display, rename, and move/copy. Thumbnails and previews show a camera-icon placeholder since Chromium cannot decode proprietary RAW formats natively.
 
 | Category | Extensions |
 |---|---|
@@ -52,18 +52,46 @@ A cross-platform desktop application for browsing, tagging, and organizing photo
 | Mamiya / Phase One RAW | MEF · IIQ |
 | Epson RAW | ERF |
 
-RAW files are fully supported for tagging, rating, notes, EXIF display, rename, and move/copy. Thumbnails and previews show a camera-icon placeholder since Chromium cannot decode proprietary RAW formats natively.
+<br>
+
+![Tags & Groups](docs/section-tags.svg)
+
+- **Custom tags** — Add, remove, and filter by tags; persisted across sessions via `electron-store`
+- **Tag autocomplete** — Typing in the tag field shows a live-filtered dropdown of existing tags with usage counts; navigate with arrow keys, confirm with Enter
+- **AI tag suggestions** — When a photo is selected, a local MobileNet-v2 model classifies the image and suggests up to 8 tags, blending ML-detected labels with tags from visually similar already-tagged photos; runs entirely on-device via ONNX Runtime WASM — no data leaves the machine; model (~14 MB) is downloaded once on first use and cached permanently
+- **Tag groups** — Create named groups that bundle multiple tags together; clicking a group in the sidebar filters the grid to photos that have any one of the group's tags (OR logic); groups are created and edited via a modal with a tag picker; group match counts update live
+- **Tag colors** — Each group gets a unique accent color from the Nord palette, shown as dots and chip borders throughout the UI
+
+<br>
+
+![Bulk Rename](docs/section-rename.svg)
+
+Single rename or batch rename with pattern variables:
+
+| Variable | Description | Example |
+|---|---|---|
+| `{name}` | Original filename without extension | `IMG_0042` |
+| `{counter:3}` | Zero-padded sequence number (digit count configurable) | `001`, `042` |
+| `{date:YYYY-MM-DD}` | Date taken from stored metadata | `2024-06-15` |
+
+A live preview updates as you type the pattern, showing the before/after filename for every selected photo.
+
+<br>
 
 ---
 
-## Getting Started
+<br>
+
+![Getting Started](docs/section-getting-started.svg)
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 18 or later
 - npm 9 or later
 
-### Install & Run
+<br>
+
+![Install](docs/section-install.svg)
 
 ```bash
 # Install dependencies
@@ -73,7 +101,9 @@ npm install
 npm run dev
 ```
 
-### Build Distributables
+<br>
+
+![Build from Source](docs/section-build.svg)
 
 ```bash
 # Windows — produces NSIS installer + portable .exe in release/
@@ -119,7 +149,26 @@ After running this once, `npm run build:win` finds the pre-populated cache and s
 
 `npm run build:mac` must be run on macOS — electron-builder rejects it immediately on Windows before downloading anything, so the symlink issue above does not apply. On macOS without an Apple Developer ID certificate, the build will fail at the code-signing step unless signing is disabled. Both the `build:mac` script and the `mac` build config already include `CSC_IDENTITY_AUTO_DISCOVERY=false` / `"sign": null` to skip signing for development builds.
 
+<br>
+
 ---
+
+<br>
+
+![Usage](docs/section-usage.svg)
+
+1. **Open a folder** — Click the folder button in the sidebar (or the toolbar) and choose a directory. All supported photo files in that folder are loaded immediately.
+2. **Browse** — Switch between grid and list view with the toolbar toggle. Click any photo to open its metadata panel on the right.
+3. **Add tags** — Type in the tag field and press Enter (or click **Add**). Existing tags appear in an autocomplete dropdown. AI-suggested tags appear as chips above the input — click one to apply it instantly.
+4. **Filter** — Click any tag in the left sidebar to filter the grid. Hold Ctrl and click multiple tags for AND filtering. Click a tag group to filter by all tags in that group (OR logic).
+5. **Select & organize** — Use Click, Ctrl+Click, or Shift+Click to select photos. Use the toolbar to rename, move, or copy the selection. Drag files from Explorer/Finder directly onto the grid to copy them in.
+6. **Sort** — Use the sort dropdown in the toolbar to sort by name, date modified, date taken, size, or location.
+
+<br>
+
+---
+
+<br>
 
 ## Project Structure
 
@@ -149,6 +198,7 @@ Photo_File_Explorer/
 │           │   └── RenameModal.tsx
 │           └── styles/
 │               └── index.css       # Nord theme + all component styles
+├── docs/                           # README section header SVGs
 ├── electron.vite.config.ts
 ├── package.json
 └── tsconfig.json
@@ -159,9 +209,13 @@ Photo_File_Explorer/
 - **`localfile://` custom protocol** — Photos are served through a sandboxed protocol handler instead of `file://`, preventing the renderer from accessing arbitrary filesystem paths.
 - **`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`** — Standard Electron security hardening; the renderer has zero Node.js access.
 - **`electron-store`** — Tags, ratings, descriptions, and notes are stored in a per-user JSON database (no EXIF writing, no sidecar files).
-- **Ref-based stable callbacks** — `exifCacheRef` and `photoDataRef` mirror their state counterparts so `loadExif` and `updatePhotoData` maintain stable identities across renders.
+- **Ref-based stable callbacks** — `exifCacheRef`, `photoDataRef`, and `filteredPhotosRef` mirror their state counterparts so `loadExif`, `updatePhotoData`, `selectPhoto`, and `selectAll` maintain stable identities across renders, keeping `React.memo` on `PhotoItem` effective.
+
+<br>
 
 ---
+
+<br>
 
 ## Security & Bug Fix Log
 
@@ -215,7 +269,11 @@ All issues found during internal security reviews and build testing are document
 | Bug | Logic | `handleAddTag` in MetadataPanel normalised tags but did not enforce the 200-character limit that the main process validates — pasting a very long string would be silently rejected by the IPC handler with no renderer-side feedback | Added `tag.length > 200` guard in `handleAddTag` to match the main-process constraint |
 | Bug | UI | `StatusBar` computed `filtered = filterTags.length > 0` — when only a tag group was active (`activeGroupId !== null`), the count still showed total photos and the "Group: …" context was absent | Extended the `filtered` condition to `filterTags.length > 0 \|\| activeGroupId !== null`; added a "Group: \<name\>" label when a group filter is active |
 
+<br>
+
 ---
+
+<br>
 
 ## Nord Theme Reference
 
@@ -236,8 +294,30 @@ The application uses the full [Nord](https://www.nordtheme.com/) palette via CSS
 | `--nord14` | `#A3BE8C` | Success states |
 | `--nord15` | `#B48EAD` | Tags |
 
+<br>
+
 ---
 
-## License
+<br>
+
+![Contributing](docs/section-contributing.svg)
+
+1. Fork the repository and create a feature branch
+2. Run `npm run dev` to start the dev server with hot reload
+3. Make your changes — keep PRs focused on a single concern
+4. Run `npx tsc --noEmit` to confirm there are no type errors before opening a PR
+
+<br>
+
+![Support](docs/section-support.svg)
+
+Found a bug or have a feature request? Please open an issue on GitHub with:
+- A clear description of the problem or request
+- Steps to reproduce (for bugs)
+- Your OS, Node.js version, and whether you are running `npm run dev` or a built package
+
+<br>
+
+![License](docs/section-license.svg)
 
 MIT

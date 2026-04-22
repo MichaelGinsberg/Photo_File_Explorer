@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 56" width="420" height="56">
+  <rect width="420" height="56" rx="10" fill="#3B4252"></rect>
+  <g transform="translate(18,12)">
+    <rect width="32" height="32" rx="7" fill="#81A1C1"></rect>
+    <g transform="translate(16,16)" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-4,-7 L-9,0 L-4,7"></path>
+      <path d="M4,-7 L9,0 L4,7"></path>
+      <line x1="2" y1="-8" x2="-2" y2="8"></line>
+    </g>
+  </g>
+  <text x="62" y="34" font-family="-apple-system,Segoe UI,sans-serif" font-size="20" font-weight="700" fill="#ECEFF4" letter-spacing="-0.2">Build from Source</text>
+  <line x1="62" y1="42" x2="100" y2="42" stroke="#81A1C1" stroke-width="2" stroke-linecap="round"></line>
+</svg>
