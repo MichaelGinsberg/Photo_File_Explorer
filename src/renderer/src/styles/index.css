@@ -954,6 +954,98 @@ a {
 
 .tag-input {
   flex: 1;
+  min-width: 0;
+}
+
+/* Tag input wrapper for positioning the suggestion dropdown */
+.tag-input-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.tag-suggestions {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: var(--nord1);
+  border: 1px solid var(--nord3);
+  border-radius: 6px;
+  z-index: 200;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.tag-suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--nord4);
+  user-select: none;
+}
+
+.tag-suggestion-item:hover,
+.tag-suggestion-item.highlighted {
+  background: var(--nord2);
+}
+
+.tag-suggestion-count {
+  font-size: 10px;
+  color: var(--nord3);
+  flex-shrink: 0;
+}
+
+/* Top used tags (quick-add chips) */
+.top-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.top-tag-chip {
+  padding: 2px 9px;
+  border-radius: 12px;
+  border: 1px dashed var(--nord15);
+  background: transparent;
+  color: var(--nord15);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--transition), border-style var(--transition);
+  opacity: 0.85;
+}
+
+.top-tag-chip:hover {
+  background: rgba(180, 142, 173, 0.18);
+  border-style: solid;
+  opacity: 1;
+}
+
+/* Date field */
+.date-field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-input {
+  flex: 1;
+  min-width: 0;
+  color-scheme: dark;
+}
+
+.date-exif-row {
+  margin-top: 5px;
+}
+
+.date-exif-value {
+  font-size: 11px;
+  color: var(--nord3);
 }
 
 /* ─── EXIF Section ───────────────────────────────────────────────────────────── */

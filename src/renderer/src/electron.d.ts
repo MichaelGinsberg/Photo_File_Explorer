@@ -39,6 +39,7 @@ declare global {
       setPhotoData(filePath: string, data: PhotoData): Promise<ApiResponse<undefined>>
       getAllTags(): Promise<ApiResponse<{ name: string; count: number }[]>>
       getAllPhotoData(): Promise<ApiResponse<Record<string, PhotoData>>>
+      renamePhotoPath(oldPath: string, newPath: string): Promise<ApiResponse<undefined>>
 
       // Shell
       openExternal(url: string): Promise<ApiResponse<undefined>>

@@ -13,13 +13,17 @@ A cross-platform desktop application for browsing, tagging, and organizing photo
 
 | Feature | Details |
 |---|---|
-| **Photo browsing** | Open any local folder and view photos as a thumbnail grid or list |
+| **Photo browsing** | Open any local folder and view photos as a thumbnail grid or list; active folder shown in the sidebar with one-click re-open |
 | **Lazy loading** | IntersectionObserver-based loading — only visible images are fetched |
-| **EXIF display** | Camera make/model/lens, exposure settings, GPS with Maps link, date taken |
+| **EXIF display** | Camera make/model/lens, exposure settings, GPS with Maps link, date taken — auto-loaded when a photo is selected |
 | **Custom tags** | Add, remove, and filter by tags; persisted across sessions |
+| **Tag autocomplete** | Typing in the tag field shows a live filtered dropdown of existing tags (with usage counts); navigate with arrow keys, confirm with Enter |
+| **Quick-add tags** | The 5 most-used tags appear as one-click chips above the tag input for fast tagging |
 | **Ratings & notes** | 5-star rating, description, and freeform notes per photo |
+| **Date Taken** | User-editable date field (YYYY-MM-DD) per photo; one-click fill from EXIF date when available; used as a sort key |
+| **Location** | Freeform location text per photo (e.g. "Paris, France"); GPS coordinates shown inline with a Maps link when EXIF data is present; used as a sort key |
 | **Multi-selection** | Click, Ctrl+Click, Shift+Click (range), Ctrl+A (all), Escape (clear) |
-| **Sort & filter** | Sort by name, date modified, or file size; filter by one or more tags |
+| **Sort & filter** | Sort by name, date modified, date taken, file size, or location; filter by one or more tags |
 | **Rename** | Single rename or bulk rename with pattern variables (`{name}`, `{counter:3}`, `{date:YYYY-MM-DD}`) |
 | **Move & copy** | Move or copy selected photos to any folder, with optional new subfolder creation |
 | **Nord theme** | Full Nord dark palette throughout the UI |
@@ -167,6 +171,12 @@ All issues found during internal security reviews and build testing are document
 | Bug | Protocol | Windows drive letter `C:` encoded as a path segment (`localfile:///C%3A/Users/...`) was silently mis-parsed by Chromium's `standard`-scheme URL normaliser, causing the protocol handler to reconstruct the wrong path and return 404 for every image | Changed URL format to a query parameter — `localfile:///?p=<encodeURIComponent(path)>` — eliminating all path-segment parsing; `URLSearchParams.get('p')` already decodes the value so no manual reconstruction is needed |
 | Bug | Protocol | Electron docs state that `standard`-scheme URLs with no host component are treated as "file-like URLs", bypassing `corsEnabled`/`secure` privileges — `localfile:///?p=...` (empty host) caused all `<img>` loads to silently fail | Changed URL format to include an explicit host: `localfile://localhost/?p=<encodeURIComponent(path)>`; host presence is required for the scheme's registered privileges to apply |
 | Hardening | DX | No way to inspect the renderer console or network requests in the production build, making protocol errors invisible | Added Ctrl+Shift+I / F12 keyboard shortcut to toggle DevTools in production |
+| Security | Protocol | Protocol handler checked `normalised.includes('..')` after `path.normalize()` — but `normalize` already resolves all `..` segments, so the check never fires on traversal attempts; it only falsely rejected legitimate paths with `..` in directory names (e.g. `my..folder`) | Replaced with `!path.isAbsolute(normalised)`: the invariant that matters is that the path is absolute, not that it lacks dots |
+| Security | Input | MoveModal subfolder validation only rejected `/`, `\`, `..`, and `.` — Windows-reserved characters (`* ? " < > | :`) and null bytes were accepted, allowing folder names that the OS would refuse or misinterpret | Extended regex to `/[/\\*?"<>|:\x00]/` plus a dot-only check, covering the full set of illegal characters on both Windows and Unix |
+| Data loss | Bug | Renaming a file updated React state but never migrated the metadata record in `electron-store` — after an app restart the renamed file had no tags, rating, notes, date, or location | Added `store:renamePhotoPath` IPC handler that moves the store record from the old path key to the new one; `renameFiles` in AppContext calls it for every successful rename |
+| Data loss | Bug | Moving a file updated React state to remove the photo from the current view but left its metadata stored under the old path — opening the destination folder showed the file with no metadata | `moveFiles` in AppContext now calls `store:renamePhotoPath` for every successfully moved file so metadata follows the file to its new location |
+| Bug | Logic | Tag input only lowercased user input — control characters, embedded newlines, and multi-space sequences were stored verbatim, corrupting the tag index | Added sanitisation: control characters (`\x00–\x1f`, `\x7f`) are stripped and internal whitespace is collapsed to a single space before the tag is saved |
+| Bug | React | RenameModal bulk preview list used array index as React key (`key={i}`) — when the pattern changed and items reordered, React reused the wrong DOM nodes | Changed to `key={p.original}` (the source filename), which is stable and unique within the preview list |
 
 ---
 

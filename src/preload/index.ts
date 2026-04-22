@@ -15,6 +15,8 @@ interface PhotoData {
   rating: number
   description: string
   notes: string
+  date: string
+  location: string
 }
 
 interface ExifData {
@@ -26,6 +28,7 @@ interface ExifData {
   iso?: number
   focalLength?: number
   dateTimeOriginal?: string
+  dateISO?: string
   latitude?: number
   longitude?: number
   width?: number
@@ -92,6 +95,9 @@ const api = {
 
   getAllPhotoData: (): Promise<ApiResponse<Record<string, PhotoData>>> =>
     ipcRenderer.invoke('store:getAllPhotoData'),
+
+  renamePhotoPath: (oldPath: string, newPath: string): Promise<ApiResponse<undefined>> =>
+    ipcRenderer.invoke('store:renamePhotoPath', oldPath, newPath),
 
   // Shell
   openExternal: (url: string): Promise<ApiResponse<undefined>> =>

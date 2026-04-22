@@ -68,7 +68,9 @@ const defaultPhotoData = (): PhotoData => ({
   tags: [],
   rating: 0,
   description: '',
-  notes: ''
+  notes: '',
+  date: '',
+  location: ''
 })
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -131,6 +133,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (sortBy === 'name') cmp = a.name.localeCompare(b.name)
       else if (sortBy === 'date') cmp = a.modified - b.modified
       else if (sortBy === 'size') cmp = a.size - b.size
+      else if (sortBy === 'dateTaken') {
+        const aMs = photoData[a.path]?.date
+          ? new Date(photoData[a.path].date).getTime()
+          : a.modified
+        const bMs = photoData[b.path]?.date
+          ? new Date(photoData[b.path].date).getTime()
+          : b.modified
+        cmp = aMs - bMs
+      } else if (sortBy === 'location') {
+        cmp = (photoData[a.path]?.location ?? '').localeCompare(photoData[b.path]?.location ?? '')
+      }
       return sortDir === 'asc' ? cmp : -cmp
     })
 
@@ -306,6 +319,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // Apply state updates for whichever renames succeeded
       if (Object.keys(pathMap).length > 0) {
+        // Persist path change in the store so metadata survives app restarts
+        await Promise.all(
+          Object.entries(pathMap).map(([oldPath, newPath]) =>
+            window.api.renamePhotoPath(oldPath, newPath)
+          )
+        )
+
         setPhotos((prev) =>
           prev.map((photo) => {
             const newPath = pathMap[photo.path]
@@ -365,6 +385,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const succeeded = res.data.filter((r) => r.success)
       const failed = res.data.filter((r) => !r.success)
+
+      // Migrate store metadata to the new path so it survives in the destination folder
+      await Promise.all(
+        succeeded
+          .filter((r) => r.newPath)
+          .map((r) => window.api.renamePhotoPath(r.path, r.newPath!))
+      )
 
       if (!copy && succeeded.length > 0) {
         const movedSet = new Set(succeeded.map((r) => r.path))

@@ -25,6 +25,8 @@ interface PhotoData {
   rating: number
   description: string
   notes: string
+  date: string
+  location: string
 }
 
 interface StoreSchema {
@@ -137,9 +139,12 @@ app.whenReady().then(() => {
       const filePath = url.searchParams.get('p') ?? ''
       if (!filePath) return new Response('Bad request', { status: 400 })
 
-      // Normalise and guard against traversal
+      // Normalise: path.normalize resolves all '..' segments, so checking
+      // for '..' in the result would only reject legitimate dir names like
+      // "my..folder" — not traversal. The real guard is path.isAbsolute()
+      // (ensures no relative path slipped through) plus the extension whitelist.
       const normalised = path.normalize(filePath)
-      if (normalised.includes('..') || normalised.includes('\0')) {
+      if (!path.isAbsolute(normalised) || normalised.includes('\0')) {
         return new Response('Forbidden', { status: 403 })
       }
 
@@ -269,6 +274,9 @@ ipcMain.handle('fs:getExifData', async (_event, filePath: string) => {
       dateTimeOriginal: raw.DateTimeOriginal
         ? new Date(raw.DateTimeOriginal).toLocaleString()
         : undefined,
+      dateISO: raw.DateTimeOriginal
+        ? new Date(raw.DateTimeOriginal).toISOString().slice(0, 10)
+        : undefined,
       latitude: raw.latitude,
       longitude: raw.longitude,
       width: raw.ImageWidth || raw.ExifImageWidth || raw.PixelXDimension,
@@ -386,7 +394,7 @@ ipcMain.handle('fs:browseDestination', async () => {
 ipcMain.handle('store:getPhotoData', (_event, filePath: string) => {
   try {
     const photos = store.get('photos') as Record<string, PhotoData>
-    const data = photos[filePath] || { tags: [], rating: 0, description: '', notes: '' }
+    const data = photos[filePath] || { tags: [], rating: 0, description: '', notes: '', date: '', location: '' }
     return { success: true, data }
   } catch (err: any) {
     return { success: false, error: err.message }
@@ -452,6 +460,23 @@ ipcMain.handle('store:getAllPhotoData', () => {
   try {
     const photos = store.get('photos') as Record<string, PhotoData>
     return { success: true, data: photos }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+// Migrate stored photo data when a file is renamed or moved.
+// Moves the data record from oldPath to newPath without touching allTags
+// counts (the tags themselves don't change, only the path key does).
+ipcMain.handle('store:renamePhotoPath', (_event, oldPath: string, newPath: string) => {
+  try {
+    const photos = store.get('photos') as Record<string, PhotoData>
+    if (photos[oldPath]) {
+      photos[newPath] = photos[oldPath]
+      delete photos[oldPath]
+      store.set('photos', photos)
+    }
+    return { success: true }
   } catch (err: any) {
     return { success: false, error: err.message }
   }

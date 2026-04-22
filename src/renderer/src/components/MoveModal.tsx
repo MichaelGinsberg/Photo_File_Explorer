@@ -44,8 +44,10 @@ export default function MoveModal() {
       // Create new subfolder if specified
       if (showNewFolder && newFolderName.trim()) {
         const folderName = newFolderName.trim()
-        if (folderName.includes('/') || folderName.includes('\\') || folderName === '..' || folderName === '.') {
-          setError('Folder name cannot contain path separators.')
+        // Reject path separators, Windows-reserved chars (* ? " < > | : \0),
+        // and names that are only dots (. or ..)
+        if (/[/\\*?"<>|:\x00]/.test(folderName) || /^\.+$/.test(folderName)) {
+          setError('Folder name contains invalid characters.')
           setIsProcessing(false)
           return
         }

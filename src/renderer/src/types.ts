@@ -11,6 +11,8 @@ export interface PhotoData {
   rating: number      // 0-5
   description: string
   notes: string
+  date: string        // YYYY-MM-DD, user-set "date taken"
+  location: string    // freeform location text
 }
 
 export interface ExifData {
@@ -25,6 +27,7 @@ export interface ExifData {
   focalLength?: number
   // Date
   dateTimeOriginal?: string
+  dateISO?: string    // YYYY-MM-DD for date input pre-fill
   // GPS
   latitude?: number
   longitude?: number
@@ -34,7 +37,7 @@ export interface ExifData {
   colorSpace?: string
 }
 
-export type SortField = 'name' | 'date' | 'size'
+export type SortField = 'name' | 'date' | 'size' | 'dateTaken' | 'location'
 export type SortDir = 'asc' | 'desc'
 export type ViewMode = 'grid' | 'list'
 

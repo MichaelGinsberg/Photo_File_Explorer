@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
 
 function buildLocalFileUrl(filePath: string): string {
@@ -23,6 +23,7 @@ export default function MetadataPanel() {
     activePhoto,
     photoData,
     exifCache,
+    allTags,
     updatePhotoData,
     loadExif,
     setShowMoveModal,
@@ -31,54 +32,86 @@ export default function MetadataPanel() {
   } = useApp()
 
   const [newTag, setNewTag] = useState('')
+  const [highlightedSugg, setHighlightedSugg] = useState(-1)
   const [exifOpen, setExifOpen] = useState(false)
   const [descValue, setDescValue] = useState('')
   const [notesValue, setNotesValue] = useState('')
+  const [dateValue, setDateValue] = useState('')
+  const [locationValue, setLocationValue] = useState('')
   const tagInputRef = useRef<HTMLInputElement>(null)
 
   const photo = activePhoto
   const data = photo ? photoData[photo.path] : null
   const exif = photo ? exifCache[photo.path] : null
 
-  // Sync description/notes only when the active photo changes, not on every data update.
-  // Keeping `data` in deps would reset the textareas while the user is typing
-  // (e.g. clicking a tag triggers a data update, which would wipe unsaved text).
+  // Sync local state when active photo changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setDescValue(data?.description ?? '')
     setNotesValue(data?.notes ?? '')
+    setDateValue(data?.date ?? '')
+    setLocationValue(data?.location ?? '')
+    setNewTag('')
+    setHighlightedSugg(-1)
   }, [photo?.path])
 
-  // Load EXIF when panel opens or photo changes
+  // Auto-load EXIF for date pre-fill and EXIF section
+  useEffect(() => {
+    if (photo) loadExif(photo.path)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photo?.path])
+
+  // Load EXIF when section is opened and not yet cached
   useEffect(() => {
     if (photo && exifOpen && !exif) {
       loadExif(photo.path)
     }
   }, [photo, exifOpen, exif, loadExif])
 
+  // ── Tag autocomplete ────────────────────────────────────────────────────────
+
+  const suggestions = useMemo(() => {
+    if (!newTag.trim() || !data) return []
+    const lower = newTag.trim().toLowerCase()
+    return allTags
+      .filter(t => t.name.includes(lower) && !data.tags.includes(t.name))
+      .slice(0, 8)
+  }, [newTag, allTags, data])
+
+  // Top 5 most-used tags not already on this photo
+  const topTags = useMemo(() => {
+    if (!data) return []
+    return [...allTags]
+      .sort((a, b) => b.count - a.count)
+      .filter(t => !data.tags.includes(t.name))
+      .slice(0, 5)
+  }, [allTags, data])
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
   const handleExifToggle = useCallback(() => {
     setExifOpen((v) => !v)
-    if (photo && !exif) {
-      loadExif(photo.path)
-    }
+    if (photo && !exif) loadExif(photo.path)
   }, [photo, exif, loadExif])
 
   const handleRatingClick = useCallback(
     (star: number) => {
       if (!photo || !data) return
-      const newRating = data.rating === star ? 0 : star
-      updatePhotoData(photo.path, { rating: newRating })
+      updatePhotoData(photo.path, { rating: data.rating === star ? 0 : star })
     },
     [photo, data, updatePhotoData]
   )
 
   const handleAddTag = useCallback(() => {
     if (!photo || !data || !newTag.trim()) return
-    const tag = newTag.trim().toLowerCase()
+    // Normalise: lowercase, collapse whitespace, strip control characters
+    const tag = newTag.trim().toLowerCase().replace(/[\x00-\x1f\x7f]/g, '').replace(/\s+/g, ' ')
+    if (!tag) return
     if (!data.tags.includes(tag)) {
       updatePhotoData(photo.path, { tags: [...data.tags, tag] })
     }
     setNewTag('')
+    setHighlightedSugg(-1)
     tagInputRef.current?.focus()
   }, [photo, data, newTag, updatePhotoData])
 
@@ -90,40 +123,84 @@ export default function MetadataPanel() {
     [photo, data, updatePhotoData]
   )
 
+  const handleTopTagClick = useCallback(
+    (tagName: string) => {
+      if (!photo || !data) return
+      if (!data.tags.includes(tagName)) {
+        updatePhotoData(photo.path, { tags: [...data.tags, tagName] })
+      }
+    },
+    [photo, data, updatePhotoData]
+  )
+
+  const handleSuggestionMouseDown = useCallback(
+    (e: React.MouseEvent, tagName: string) => {
+      e.preventDefault() // prevent input blur before click registers
+      if (!photo || !data) return
+      if (!data.tags.includes(tagName)) {
+        updatePhotoData(photo.path, { tags: [...data.tags, tagName] })
+      }
+      setNewTag('')
+      setHighlightedSugg(-1)
+      tagInputRef.current?.focus()
+    },
+    [photo, data, updatePhotoData]
+  )
+
   const handleTagKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'ArrowDown') {
       e.preventDefault()
-      handleAddTag()
+      setHighlightedSugg(prev => Math.min(prev + 1, suggestions.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightedSugg(prev => Math.max(prev - 1, -1))
+    } else if (e.key === 'Escape') {
+      setHighlightedSugg(-1)
+      setNewTag('')
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (highlightedSugg >= 0 && suggestions[highlightedSugg]) {
+        const tag = suggestions[highlightedSugg].name
+        if (photo && data && !data.tags.includes(tag)) {
+          updatePhotoData(photo.path, { tags: [...data.tags, tag] })
+        }
+        setNewTag('')
+        setHighlightedSugg(-1)
+      } else {
+        handleAddTag()
+      }
     }
   }
 
   const handleDescBlur = () => {
     if (!photo || !data) return
-    if (descValue !== data.description) {
-      updatePhotoData(photo.path, { description: descValue })
-    }
+    if (descValue !== data.description) updatePhotoData(photo.path, { description: descValue })
   }
 
   const handleNotesBlur = () => {
     if (!photo || !data) return
-    if (notesValue !== data.notes) {
-      updatePhotoData(photo.path, { notes: notesValue })
-    }
+    if (notesValue !== data.notes) updatePhotoData(photo.path, { notes: notesValue })
   }
 
-  const handleRename = () => {
-    setShowRenameModal(true)
+  const handleDateBlur = () => {
+    if (!photo || !data) return
+    if (dateValue !== data.date) updatePhotoData(photo.path, { date: dateValue })
   }
 
-  const handleMove = () => {
-    setIsCopyMode(false)
-    setShowMoveModal(true)
+  const handleLocationBlur = () => {
+    if (!photo || !data) return
+    if (locationValue !== data.location) updatePhotoData(photo.path, { location: locationValue })
   }
 
-  const handleCopy = () => {
-    setIsCopyMode(true)
-    setShowMoveModal(true)
-  }
+  const handleUseExifDate = useCallback(() => {
+    if (!photo || !data || !exif?.dateISO) return
+    setDateValue(exif.dateISO)
+    updatePhotoData(photo.path, { date: exif.dateISO })
+  }, [photo, data, exif, updatePhotoData])
+
+  const handleRename = () => setShowRenameModal(true)
+  const handleMove = () => { setIsCopyMode(false); setShowMoveModal(true) }
+  const handleCopy = () => { setIsCopyMode(true); setShowMoveModal(true) }
 
   const openInMaps = (lat: number, lon: number) => {
     window.api.openExternal(`https://maps.google.com/?q=${lat},${lon}`)
@@ -153,9 +230,7 @@ export default function MetadataPanel() {
       <div className="metadata-content">
         {/* Filename */}
         <div className="metadata-section">
-          <h3 className="metadata-filename" title={photo.name}>
-            {photo.name}
-          </h3>
+          <h3 className="metadata-filename" title={photo.name}>{photo.name}</h3>
         </div>
 
         {/* File info */}
@@ -195,6 +270,24 @@ export default function MetadataPanel() {
         {/* Tags */}
         <div className="metadata-section">
           <div className="metadata-section-title">Tags</div>
+
+          {/* Top used tags (quick-add) */}
+          {topTags.length > 0 && (
+            <div className="top-tags">
+              {topTags.map(tag => (
+                <button
+                  key={tag.name}
+                  className="top-tag-chip"
+                  onClick={() => handleTopTagClick(tag.name)}
+                  title={`Add "${tag.name}" · used ${tag.count}×`}
+                >
+                  + {tag.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Applied tags */}
           <div className="tag-chips">
             {data.tags.map((tag, i) => (
               <span
@@ -214,20 +307,90 @@ export default function MetadataPanel() {
               </span>
             ))}
           </div>
+
+          {/* Input with autocomplete */}
           <div className="tag-input-row">
-            <input
-              ref={tagInputRef}
-              type="text"
-              className="input tag-input"
-              placeholder="Add tag..."
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={handleTagKeyDown}
-            />
-            <button className="btn btn-secondary btn-sm" onClick={handleAddTag}>
-              Add
-            </button>
+            <div className="tag-input-wrapper">
+              <input
+                ref={tagInputRef}
+                type="text"
+                className="input tag-input"
+                placeholder="Add tag..."
+                value={newTag}
+                onChange={(e) => { setNewTag(e.target.value); setHighlightedSugg(-1) }}
+                onKeyDown={handleTagKeyDown}
+              />
+              {suggestions.length > 0 && (
+                <div className="tag-suggestions">
+                  {suggestions.map((s, i) => (
+                    <div
+                      key={s.name}
+                      className={`tag-suggestion-item ${i === highlightedSugg ? 'highlighted' : ''}`}
+                      onMouseDown={(e) => handleSuggestionMouseDown(e, s.name)}
+                    >
+                      <span>{s.name}</span>
+                      <span className="tag-suggestion-count">{s.count}×</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={handleAddTag}>Add</button>
           </div>
+        </div>
+
+        {/* Date Taken */}
+        <div className="metadata-section">
+          <div className="metadata-section-title">Date Taken</div>
+          <div className="date-field-row">
+            <input
+              type="date"
+              className="input date-input"
+              value={dateValue}
+              onChange={(e) => setDateValue(e.target.value)}
+              onBlur={handleDateBlur}
+            />
+            {exif?.dateISO && exif.dateISO !== dateValue && (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={handleUseExifDate}
+                title={`Use EXIF date: ${exif.dateTimeOriginal}`}
+              >
+                ↑ EXIF
+              </button>
+            )}
+          </div>
+          {exif?.dateTimeOriginal && (
+            <div className="metadata-row date-exif-row">
+              <span className="metadata-label">EXIF</span>
+              <span className="metadata-value date-exif-value">{exif.dateTimeOriginal}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Location */}
+        <div className="metadata-section">
+          <div className="metadata-section-title">Location</div>
+          <input
+            type="text"
+            className="input"
+            placeholder="e.g. Paris, France"
+            value={locationValue}
+            onChange={(e) => setLocationValue(e.target.value)}
+            onBlur={handleLocationBlur}
+          />
+          {exif?.latitude !== undefined && exif?.longitude !== undefined && (
+            <div className="metadata-row" style={{ marginTop: '6px' }}>
+              <span className="metadata-label">GPS</span>
+              <button
+                className="btn btn-ghost btn-sm maps-btn"
+                style={{ padding: '0', font: 'inherit', fontSize: '11px', color: 'var(--nord8)' }}
+                onClick={() => openInMaps(exif!.latitude!, exif!.longitude!)}
+              >
+                {exif.latitude.toFixed(5)}, {exif.longitude.toFixed(5)} ↗
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Description */}
@@ -373,7 +536,6 @@ export default function MetadataPanel() {
                     </div>
                   )}
 
-                  {/* No EXIF */}
                   {!exif.make && !exif.model && !exif.exposureTime && !exif.dateTimeOriginal &&
                     !exif.latitude && !exif.width && (
                       <div className="exif-none">No EXIF data available</div>
@@ -388,15 +550,9 @@ export default function MetadataPanel() {
         <div className="metadata-section metadata-actions">
           <div className="metadata-section-title">Actions</div>
           <div className="action-buttons">
-            <button className="btn btn-secondary" onClick={handleRename}>
-              ✎ Rename
-            </button>
-            <button className="btn btn-secondary" onClick={handleMove}>
-              → Move
-            </button>
-            <button className="btn btn-secondary" onClick={handleCopy}>
-              ⎘ Copy
-            </button>
+            <button className="btn btn-secondary" onClick={handleRename}>✎ Rename</button>
+            <button className="btn btn-secondary" onClick={handleMove}>→ Move</button>
+            <button className="btn btn-secondary" onClick={handleCopy}>⎘ Copy</button>
           </div>
         </div>
       </div>

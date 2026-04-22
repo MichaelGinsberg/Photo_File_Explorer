@@ -176,8 +176,8 @@ export default function RenameModal() {
               <div className="form-group">
                 <label className="form-label">Preview (first 3 files)</label>
                 <div className="rename-preview">
-                  {bulkPreviews.map((p, i) => (
-                    <div key={i} className="rename-preview-item">
+                  {bulkPreviews.map((p) => (
+                    <div key={p.original} className="rename-preview-item">
                       <span className="rename-preview-old">{p.original}</span>
                       <span className="rename-preview-arrow">→</span>
                       <span className="rename-preview-new">{p.newName}</span>

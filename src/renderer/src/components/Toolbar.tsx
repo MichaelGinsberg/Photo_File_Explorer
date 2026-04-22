@@ -88,7 +88,9 @@ export default function Toolbar() {
           <select className="sort-select" value={sortBy} onChange={handleSort}>
             <option value="name">Name</option>
             <option value="date">Date Modified</option>
+            <option value="dateTaken">Date Taken</option>
             <option value="size">File Size</option>
+            <option value="location">Location</option>
           </select>
           <button
             className="sort-dir-btn"
