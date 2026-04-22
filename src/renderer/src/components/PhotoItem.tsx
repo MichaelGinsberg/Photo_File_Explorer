@@ -12,10 +12,7 @@ interface PhotoItemProps {
 }
 
 function buildLocalFileUrl(filePath: string): string {
-  // Split on both / and \ separators
-  const parts = filePath.split(/[\\/]/)
-  const encoded = parts.map((p) => encodeURIComponent(p))
-  return 'localfile:///' + encoded.join('/')
+  return `localfile://localhost/?p=${encodeURIComponent(filePath)}`
 }
 
 function formatSize(bytes: number): string {

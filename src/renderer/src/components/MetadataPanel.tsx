@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useApp } from '../context/AppContext'
 
 function buildLocalFileUrl(filePath: string): string {
-  const parts = filePath.split(/[\\/]/)
-  const encoded = parts.map((p) => encodeURIComponent(p))
-  return 'localfile:///' + encoded.join('/')
+  return `localfile://localhost/?p=${encodeURIComponent(filePath)}`
 }
 
 function formatSize(bytes: number): string {

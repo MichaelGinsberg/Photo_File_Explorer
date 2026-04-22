@@ -4,10 +4,8 @@ import {
   ipcMain,
   dialog,
   protocol,
-  net,
   shell
 } from 'electron'
-import { pathToFileURL } from 'url'
 import path from 'path'
 import fs from 'fs'
 import Store from 'electron-store'
@@ -42,6 +40,20 @@ const store = new Store<StoreSchema>({
     allTags: {}
   }
 })
+
+// ─── MIME types for photo extensions ─────────────────────────────────────────
+
+const PHOTO_MIME: Record<string, string> = {
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png':  'image/png',
+  '.gif':  'image/gif',
+  '.webp': 'image/webp',
+  '.tiff': 'image/tiff',
+  '.tif':  'image/tiff',
+  '.bmp':  'image/bmp',
+  '.heic': 'image/heic',
+}
 
 // ─── Custom protocol (MUST be before app.whenReady) ──────────────────────────
 
@@ -88,6 +100,17 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  // Ctrl+Shift+I / F12 → toggle DevTools
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (
+      input.type === 'keyDown' &&
+      (input.key === 'F12' ||
+        (input.control && input.shift && input.key === 'I'))
+    ) {
+      mainWindow?.webContents.toggleDevTools()
+    }
+  })
+
   // Load the renderer
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -100,36 +123,40 @@ function createWindow(): void {
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
-  // Register localfile:// protocol handler
+  // Register localfile:// protocol handler.
+  // URL format: localfile://localhost/?p=<encodeURIComponent(absolutePath)>
+  // Using a query param avoids path-segment parsing edge cases with Windows
+  // drive letters under Chromium's URL normaliser. The explicit 'localhost'
+  // host is required: Electron docs state that standard-scheme URLs with no
+  // host are treated as file-like URLs, bypassing the corsEnabled / secure
+  // privileges and causing image loads to fail silently.
   protocol.handle('localfile', async (request) => {
     try {
       const url = new URL(request.url)
-      const pathParts = url.pathname.split('/').filter(Boolean)
-      const decodedParts = pathParts.map((p) => decodeURIComponent(p))
+      // searchParams.get() already percent-decodes the value
+      const filePath = url.searchParams.get('p') ?? ''
+      if (!filePath) return new Response('Bad request', { status: 400 })
 
-      // Block traversal sequences and null bytes before constructing the path
-      if (decodedParts.some((p) => p === '..' || p === '.' || p.includes('\0'))) {
+      // Normalise and guard against traversal
+      const normalised = path.normalize(filePath)
+      if (normalised.includes('..') || normalised.includes('\0')) {
         return new Response('Forbidden', { status: 403 })
       }
 
-      let filePath: string
-      if (process.platform === 'win32') {
-        filePath = decodedParts.join('\\')
-        if (filePath.length >= 2 && filePath[1] !== ':') {
-          filePath = filePath[0] + ':' + filePath.slice(1)
-        }
-      } else {
-        filePath = '/' + decodedParts.join('/')
-      }
-
-      // Only serve recognised photo extensions
-      const ext = path.extname(filePath).toLowerCase()
+      const ext = path.extname(normalised).toLowerCase()
       if (!PHOTO_EXTENSIONS.has(ext)) {
         return new Response('Forbidden', { status: 403 })
       }
 
-      const fileUrl = pathToFileURL(filePath).toString()
-      return net.fetch(fileUrl)
+      const data = await fs.promises.readFile(normalised)
+      return new Response(data, {
+        status: 200,
+        headers: {
+          'Content-Type': PHOTO_MIME[ext] ?? 'application/octet-stream',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      })
     } catch (err) {
       console.error('Protocol handler error:', err)
       return new Response('File not found', { status: 404 })

@@ -2,10 +2,9 @@ import React from 'react'
 import { useApp } from '../context/AppContext'
 
 export default function Sidebar() {
-  const { allTags, filterTags, filteredPhotos, photos, toggleFilterTag } = useApp()
+  const { allTags, filterTags, filteredPhotos, photos, toggleFilterTag, currentFolder, openFolder } = useApp()
 
   const clearFilter = () => {
-    // Clear all filter tags by toggling each active one off
     for (const tag of filterTags) {
       toggleFilterTag(tag)
     }
@@ -13,9 +12,36 @@ export default function Sidebar() {
 
   const allActive = filterTags.length === 0
 
+  // Derive display name (last path segment) from the full folder path
+  const folderName = currentFolder
+    ? currentFolder.split(/[\\/]/).filter(Boolean).pop() ?? currentFolder
+    : null
+
   return (
     <aside className="sidebar">
+      {/* ── Folder section ── */}
       <div className="sidebar-header">
+        <span className="sidebar-title">Folder</span>
+      </div>
+      <div className="sidebar-folder">
+        <button className="sidebar-folder-btn" onClick={openFolder} title={currentFolder ?? 'Open a folder'}>
+          <svg className="sidebar-folder-icon" width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M.54 3.87L.5 3a2 2 0 012-2h3.19a2 2 0 011.45.63l.33.37H14a2 2 0 012 2v8.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 010 12.5V3.87z"/>
+          </svg>
+          <span className="sidebar-folder-text">
+            {folderName
+              ? <><span className="sidebar-folder-name">{folderName}</span><span className="sidebar-folder-path">{currentFolder}</span></>
+              : <span className="sidebar-folder-placeholder">Open a folder…</span>
+            }
+          </span>
+          <svg className="sidebar-folder-chevron" width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M4.646 1.646a.5.5 0 01.708 0l6 6a.5.5 0 010 .708l-6 6a.5.5 0 01-.708-.708L10.293 8 4.646 2.354a.5.5 0 010-.708z"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* ── Tags section ── */}
+      <div className="sidebar-header sidebar-header--tags">
         <span className="sidebar-title">Tags</span>
       </div>
 
