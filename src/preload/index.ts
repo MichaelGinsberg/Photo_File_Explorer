@@ -99,6 +99,9 @@ const api = {
   renamePhotoPath: (oldPath: string, newPath: string): Promise<ApiResponse<undefined>> =>
     ipcRenderer.invoke('store:renamePhotoPath', oldPath, newPath),
 
+  getLastFolder: (): Promise<ApiResponse<string | null>> =>
+    ipcRenderer.invoke('store:getLastFolder'),
+
   // Shell
   openExternal: (url: string): Promise<ApiResponse<undefined>> =>
     ipcRenderer.invoke('shell:openExternal', url)

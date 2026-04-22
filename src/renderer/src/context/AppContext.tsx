@@ -102,9 +102,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isCopyMode, setIsCopyMode] = useState(false)
   const [platform, setPlatform] = useState('win32')
 
-  // Get platform on mount
+  // On mount: detect platform and restore the last open folder in parallel
   useEffect(() => {
     window.api.getPlatform().then(setPlatform).catch(console.error)
+
+    window.api.getLastFolder()
+      .then(res => {
+        if (!res.success || !res.data) return
+        const folder = res.data
+        setCurrentFolder(folder)
+        setFilterTags([])
+        lastClickedPath.current = null
+        loadFolder(folder)
+      })
+      .catch(console.error)
+  // loadFolder is stable (its deps are all stable); eslint would flag it as missing
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Refresh all tags from store

@@ -32,6 +32,7 @@ interface PhotoData {
 interface StoreSchema {
   photos: Record<string, PhotoData>
   allTags: Record<string, number>
+  lastFolder: string | null
 }
 
 // ─── electron-store ───────────────────────────────────────────────────────────
@@ -39,9 +40,14 @@ interface StoreSchema {
 const store = new Store<StoreSchema>({
   defaults: {
     photos: {},
-    allTags: {}
+    allTags: {},
+    lastFolder: null
   }
 })
+
+// ─── exifr module cache ───────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let exifrLib: any = null
 
 // ─── MIME types for photo extensions ─────────────────────────────────────────
 
@@ -168,6 +174,10 @@ app.whenReady().then(() => {
     }
   })
 
+  // Pre-warm exifr in the background so the first EXIF request
+  // doesn't pay the dynamic-import cost (~150–300 ms on cold cache).
+  import('exifr').then(m => { exifrLib = m }).catch(() => {})
+
   createWindow()
 
   app.on('activate', () => {
@@ -203,7 +213,9 @@ ipcMain.handle('dialog:openFolder', async () => {
     if (result.canceled || result.filePaths.length === 0) {
       return { success: true, data: null }
     }
-    return { success: true, data: result.filePaths[0] }
+    const folder = result.filePaths[0]
+    store.set('lastFolder', folder)
+    return { success: true, data: folder }
   } catch (err: any) {
     return { success: false, error: err.message }
   }
@@ -218,28 +230,29 @@ const PHOTO_EXTENSIONS = new Set([
 ipcMain.handle('fs:readDirectory', async (_event, dirPath: string) => {
   try {
     const entries = await fs.promises.readdir(dirPath)
-    const photos: Photo[] = []
 
-    for (const entry of entries) {
-      const ext = path.extname(entry).toLowerCase()
-      if (!PHOTO_EXTENSIONS.has(ext)) continue
+    // Filter by extension first (no I/O), then stat all candidates in parallel.
+    // Sequential lstat in a loop is the dominant cost for large folders; Promise.all
+    // issues every lstat concurrently and lets the OS schedule them optimally.
+    const candidates = entries.filter(e =>
+      PHOTO_EXTENSIONS.has(path.extname(e).toLowerCase())
+    )
 
-      const fullPath = path.join(dirPath, entry)
-      try {
-        const stat = await fs.promises.lstat(fullPath)
-        if (!stat.isFile()) continue  // lstat: symlinks return isSymbolicLink(), not isFile()
-        photos.push({
-          path: fullPath,
-          name: entry,
-          size: stat.size,
-          modified: stat.mtimeMs,
-          extension: ext.slice(1).toUpperCase()
-        })
-      } catch {
-        // skip files we can't stat
-      }
-    }
+    const settled = await Promise.all(
+      candidates.map(async (entry): Promise<Photo | null> => {
+        const ext = path.extname(entry).toLowerCase()
+        const fullPath = path.join(dirPath, entry)
+        try {
+          const stat = await fs.promises.lstat(fullPath)
+          if (!stat.isFile()) return null // symlinks: isSymbolicLink(), not isFile()
+          return { path: fullPath, name: entry, size: stat.size, modified: stat.mtimeMs, extension: ext.slice(1).toUpperCase() }
+        } catch {
+          return null
+        }
+      })
+    )
 
+    const photos = settled.filter((p): p is Photo => p !== null)
     photos.sort((a, b) => a.name.localeCompare(b.name))
     return { success: true, data: photos }
   } catch (err: any) {
@@ -249,8 +262,8 @@ ipcMain.handle('fs:readDirectory', async (_event, dirPath: string) => {
 
 ipcMain.handle('fs:getExifData', async (_event, filePath: string) => {
   try {
-    // Dynamic ESM import of exifr
-    const exifr = await import('exifr')
+    // Use pre-warmed module if available, otherwise import and cache now
+    const exifr = exifrLib ?? (exifrLib = await import('exifr'))
     const raw = await Promise.race([
       exifr.default.parse(filePath, {
         tiff: true, exif: true, gps: true,
@@ -460,6 +473,14 @@ ipcMain.handle('store:getAllPhotoData', () => {
   try {
     const photos = store.get('photos') as Record<string, PhotoData>
     return { success: true, data: photos }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('store:getLastFolder', () => {
+  try {
+    return { success: true, data: store.get('lastFolder') as string | null }
   } catch (err: any) {
     return { success: false, error: err.message }
   }

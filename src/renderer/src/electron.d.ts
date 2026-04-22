@@ -40,6 +40,7 @@ declare global {
       getAllTags(): Promise<ApiResponse<{ name: string; count: number }[]>>
       getAllPhotoData(): Promise<ApiResponse<Record<string, PhotoData>>>
       renamePhotoPath(oldPath: string, newPath: string): Promise<ApiResponse<undefined>>
+      getLastFolder(): Promise<ApiResponse<string | null>>
 
       // Shell
       openExternal(url: string): Promise<ApiResponse<undefined>>
