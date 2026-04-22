@@ -22,10 +22,13 @@ export default function TagGroupModal() {
     setConfirmDelete(false)
   }, [editingGroup])
 
-  // Color this group will use: existing color (edit) or next palette slot (create)
-  const thisColor = isEdit
-    ? (editingGroup!.color || DEFAULT_TAG_COLOR)
-    : GROUP_COLORS[tagGroups.length % GROUP_COLORS.length]
+  // Color this group will use: existing color (edit), or the first palette color not
+  // already used by another group (create). Falls back to cycling if all colors are taken.
+  const thisColor = useMemo(() => {
+    if (isEdit) return editingGroup!.color || DEFAULT_TAG_COLOR
+    const usedColors = new Set(tagGroups.map(g => g.color))
+    return GROUP_COLORS.find(c => !usedColors.has(c)) ?? GROUP_COLORS[tagGroups.length % GROUP_COLORS.length]
+  }, [isEdit, editingGroup, tagGroups])
 
   // Map each tag to whichever OTHER group currently owns it (for picker hints)
   const otherGroupByTag = useMemo(() => {

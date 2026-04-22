@@ -1,67 +1,51 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useApp } from '../context/AppContext'
 
-export default function MoveModal() {
-  const { selectedPaths, photos, moveFiles, setShowMoveModal, isCopyMode } = useApp()
+const INVALID_NAME = /[/\\*?"<>|:\x00]/
 
+export default function MoveModal() {
+  const { selectedPaths, photos, currentFolder, moveFiles, setShowMoveModal, isCopyMode } = useApp()
+
+  const [mode, setMode] = useState<'existing' | 'new'>('existing')
   const [destPath, setDestPath] = useState('')
   const [newFolderName, setNewFolderName] = useState('')
-  const [showNewFolder, setShowNewFolder] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
 
   const selectedPhotos = photos.filter((p) => selectedPaths.has(p.path))
   const title = isCopyMode ? 'Copy Photos' : 'Move Photos'
-  const confirmLabel = isCopyMode ? 'Copy' : 'Move'
+  const actionLabel = isCopyMode ? 'Copy' : 'Move'
 
-  useEffect(() => {
-    // Reset state when modal opens
-    setDestPath('')
-    setNewFolderName('')
-    setShowNewFolder(false)
-    setError('')
-  }, [isCopyMode])
+  const sep = currentFolder?.includes('/') ? '/' : '\\'
+  const newFolderPreview = currentFolder && newFolderName.trim()
+    ? currentFolder + sep + newFolderName.trim()
+    : null
 
   const handleBrowse = async () => {
     const res = await window.api.browseDestination()
-    if (res.success && res.data) {
-      setDestPath(res.data)
-    }
+    if (res.success && res.data) setDestPath(res.data)
   }
 
   const handleConfirm = async () => {
-    if (!destPath.trim()) {
-      setError('Please select a destination folder.')
-      return
-    }
-
-    setIsProcessing(true)
     setError('')
-
+    setIsProcessing(true)
     try {
-      let finalDest = destPath.trim()
-
-      // Create new subfolder if specified
-      if (showNewFolder && newFolderName.trim()) {
-        const folderName = newFolderName.trim()
-        // Reject path separators, Windows-reserved chars (* ? " < > | : \0),
-        // and names that are only dots (. or ..)
-        if (/[/\\*?"<>|:\x00]/.test(folderName) || /^\.+$/.test(folderName)) {
+      if (mode === 'existing') {
+        if (!destPath.trim()) { setError('Please select a destination folder.'); return }
+        await moveFiles(destPath.trim(), isCopyMode)
+      } else {
+        const name = newFolderName.trim()
+        if (!name) { setError('Please enter a folder name.'); return }
+        if (INVALID_NAME.test(name) || /^\.+$/.test(name)) {
           setError('Folder name contains invalid characters.')
-          setIsProcessing(false)
           return
         }
-        const sep = finalDest.includes('/') ? '/' : '\\'
-        finalDest = finalDest + sep + folderName
+        if (!currentFolder) { setError('No folder is currently open.'); return }
+        const finalDest = currentFolder + sep + name
         const mkRes = await window.api.createDirectory(finalDest)
-        if (!mkRes.success) {
-          setError(`Could not create folder: ${mkRes.error}`)
-          setIsProcessing(false)
-          return
-        }
+        if (!mkRes.success) { setError(`Could not create folder: ${mkRes.error}`); return }
+        await moveFiles(finalDest, isCopyMode)
       }
-
-      await moveFiles(finalDest, isCopyMode)
     } catch (err: any) {
       setError(err.message || 'An error occurred.')
     } finally {
@@ -69,59 +53,72 @@ export default function MoveModal() {
     }
   }
 
-  const handleCancel = () => {
-    setShowMoveModal(false)
-  }
+  const canConfirm = mode === 'existing' ? !!destPath.trim() : !!newFolderName.trim()
 
   return (
-    <div className="modal-overlay" onClick={handleCancel}>
+    <div className="modal-overlay" onClick={() => setShowMoveModal(false)}>
       <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">{title}</h2>
-          <button className="modal-close" onClick={handleCancel}>×</button>
+          <button className="modal-close" onClick={() => setShowMoveModal(false)}>×</button>
         </div>
 
         <div className="modal-body">
-          {/* File count */}
           <div className="modal-info">
             {selectedPhotos.length} photo{selectedPhotos.length !== 1 ? 's' : ''} will be {isCopyMode ? 'copied' : 'moved'}
           </div>
 
-          {/* Destination */}
-          <div className="form-group">
-            <label className="form-label">Destination Folder</label>
-            <div className="input-row">
+          {/* Mode toggle */}
+          <div className="move-mode-toggle">
+            <button
+              className={`move-mode-btn ${mode === 'existing' ? 'active' : ''}`}
+              onClick={() => { setMode('existing'); setError('') }}
+            >
+              Existing Folder
+            </button>
+            <button
+              className={`move-mode-btn ${mode === 'new' ? 'active' : ''}`}
+              onClick={() => { setMode('new'); setError('') }}
+            >
+              New Folder
+            </button>
+          </div>
+
+          {mode === 'existing' ? (
+            <div className="form-group">
+              <label className="form-label">Destination Folder</label>
+              <div className="input-row">
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Enter or browse to a destination path…"
+                  value={destPath}
+                  onChange={(e) => setDestPath(e.target.value)}
+                />
+                <button className="btn btn-secondary" onClick={handleBrowse}>
+                  Browse…
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">New Folder Name</label>
               <input
                 type="text"
                 className="input"
-                placeholder="Enter destination path..."
-                value={destPath}
-                onChange={(e) => setDestPath(e.target.value)}
-              />
-              <button className="btn btn-secondary" onClick={handleBrowse}>
-                Browse...
-              </button>
-            </div>
-          </div>
-
-          {/* New folder option */}
-          <div className="form-group">
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setShowNewFolder((v) => !v)}
-            >
-              {showNewFolder ? '▾' : '▸'} Create New Subfolder
-            </button>
-            {showNewFolder && (
-              <input
-                type="text"
-                className="input mt-8"
-                placeholder="New folder name..."
+                placeholder="e.g. Summer 2024"
                 value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
+                autoFocus
+                onChange={(e) => { setNewFolderName(e.target.value); setError('') }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && canConfirm) handleConfirm() }}
               />
-            )}
-          </div>
+              {newFolderPreview && (
+                <div className="move-folder-preview">
+                  Will be created at: <span className="move-folder-preview-path">{newFolderPreview}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* File preview */}
           <div className="form-group">
@@ -134,27 +131,24 @@ export default function MoveModal() {
                 </div>
               ))}
               {selectedPhotos.length > 20 && (
-                <div className="file-list-more">
-                  +{selectedPhotos.length - 20} more files...
-                </div>
+                <div className="file-list-more">+{selectedPhotos.length - 20} more…</div>
               )}
             </div>
           </div>
 
-          {/* Error */}
           {error && <div className="form-error">{error}</div>}
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={handleCancel} disabled={isProcessing}>
+          <button className="btn btn-secondary" onClick={() => setShowMoveModal(false)} disabled={isProcessing}>
             Cancel
           </button>
           <button
             className="btn btn-primary"
             onClick={handleConfirm}
-            disabled={isProcessing || !destPath.trim()}
+            disabled={isProcessing || !canConfirm}
           >
-            {isProcessing ? 'Processing...' : confirmLabel}
+            {isProcessing ? 'Processing…' : actionLabel}
           </button>
         </div>
       </div>

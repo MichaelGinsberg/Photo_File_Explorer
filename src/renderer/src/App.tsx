@@ -91,26 +91,30 @@ function AppInner() {
     setIsDragOver(false)
     if (!currentFolder) return
 
-    const photoPaths = Array.from(e.dataTransfer.files)
-      .map(f => (f as ElectronFile).path)
-      .filter(p => p && PHOTO_EXTS.has(getExt(p)))
+    try {
+      const photoPaths = Array.from(e.dataTransfer.files)
+        .map(f => (f as ElectronFile).path)
+        .filter(p => p && PHOTO_EXTS.has(getExt(p)))
 
-    if (photoPaths.length === 0) {
-      showToast('No supported photo files found')
-      return
+      if (photoPaths.length === 0) {
+        showToast('No supported photo files found')
+        return
+      }
+
+      const res = await window.api.copyFiles(photoPaths, currentFolder)
+      if (!res.success) { showToast('Copy failed'); return }
+
+      const ok = res.data?.filter(r => r.success).length ?? 0
+      const fail = res.data?.filter(r => !r.success).length ?? 0
+
+      await refreshFolder()
+
+      if (fail > 0 && ok > 0) showToast(`Copied ${ok}, ${fail} already exist`)
+      else if (fail > 0) showToast(`${fail} file${fail !== 1 ? 's' : ''} already exist in folder`)
+      else showToast(`Copied ${ok} photo${ok !== 1 ? 's' : ''}`)
+    } catch {
+      showToast('Drop failed')
     }
-
-    const res = await window.api.copyFiles(photoPaths, currentFolder)
-    if (!res.success) { showToast('Copy failed'); return }
-
-    const ok = res.data?.filter(r => r.success).length ?? 0
-    const fail = res.data?.filter(r => !r.success).length ?? 0
-
-    await refreshFolder()
-
-    if (fail > 0 && ok > 0) showToast(`Copied ${ok}, ${fail} already exist`)
-    else if (fail > 0) showToast(`${fail} file${fail !== 1 ? 's' : ''} already exist in folder`)
-    else showToast(`Copied ${ok} photo${ok !== 1 ? 's' : ''}`)
   }, [currentFolder, refreshFolder, showToast])
 
   const folderBaseName = currentFolder?.split(/[\\/]/).filter(Boolean).pop() ?? ''

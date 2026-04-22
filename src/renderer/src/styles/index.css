@@ -1521,6 +1521,52 @@ a {
   border-radius: var(--radius-sm);
 }
 
+/* Move modal — mode toggle */
+.move-mode-toggle {
+  display: flex;
+  background: var(--nord2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.move-mode-btn {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--nord3);
+  transition: background var(--transition), color var(--transition);
+  text-align: center;
+}
+
+.move-mode-btn:hover {
+  background: var(--nord3);
+  color: var(--nord4);
+}
+
+.move-mode-btn.active {
+  background: var(--nord10);
+  color: white;
+}
+
+.move-folder-preview {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--nord3);
+  line-height: 1.5;
+}
+
+.move-folder-preview-path {
+  color: var(--nord8);
+  word-break: break-all;
+}
+
+/* Toolbar select-all button */
+.toolbar-select-all {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* File list in MoveModal */
 .file-list {
   background: var(--nord0);

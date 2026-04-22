@@ -193,6 +193,11 @@ app.whenReady().then(() => {
         return new Response('Forbidden', { status: 403 })
       }
 
+      const stat = await fs.promises.lstat(normalised)
+      if (!stat.isFile()) return new Response('Forbidden', { status: 403 })
+      const MAX_FILE_BYTES = 200 * 1024 * 1024 // 200 MB
+      if (stat.size > MAX_FILE_BYTES) return new Response('File too large', { status: 413 })
+
       const data = await fs.promises.readFile(normalised)
       return new Response(data, {
         status: 200,
@@ -356,6 +361,13 @@ ipcMain.handle('fs:getExifData', async (_event, filePath: string) => {
 
 ipcMain.handle('fs:renameFile', async (_event, oldPath: string, newPath: string) => {
   try {
+    if (typeof oldPath !== 'string' || typeof newPath !== 'string' ||
+        !path.isAbsolute(oldPath) || !path.isAbsolute(newPath)) {
+      return { success: false, error: 'Paths must be absolute' }
+    }
+    if (path.dirname(oldPath) !== path.dirname(newPath)) {
+      return { success: false, error: 'Cannot rename across directories' }
+    }
     if (oldPath !== newPath && await destExists(newPath)) {
       return { success: false, error: `A file named "${path.basename(newPath)}" already exists in this folder` }
     }
@@ -467,6 +479,30 @@ ipcMain.handle('store:getPhotoData', (_event, filePath: string) => {
 
 ipcMain.handle('store:setPhotoData', (_event, filePath: string, data: PhotoData) => {
   try {
+    if (typeof filePath !== 'string' || !path.isAbsolute(filePath)) {
+      return { success: false, error: 'Invalid file path' }
+    }
+    if (!data || typeof data !== 'object') {
+      return { success: false, error: 'Invalid data' }
+    }
+    if (!Array.isArray(data.tags) || data.tags.some((t: unknown) => typeof t !== 'string' || t.length > 200)) {
+      return { success: false, error: 'Invalid tags' }
+    }
+    if (typeof data.rating !== 'number' || data.rating < 0 || data.rating > 5 || !Number.isInteger(data.rating)) {
+      return { success: false, error: 'Invalid rating' }
+    }
+    if (typeof data.description !== 'string' || data.description.length > 10000) {
+      return { success: false, error: 'Invalid description' }
+    }
+    if (typeof data.notes !== 'string' || data.notes.length > 10000) {
+      return { success: false, error: 'Invalid notes' }
+    }
+    if (typeof data.date !== 'string' || data.date.length > 20) {
+      return { success: false, error: 'Invalid date' }
+    }
+    if (typeof data.location !== 'string' || data.location.length > 500) {
+      return { success: false, error: 'Invalid location' }
+    }
     const photos = store.get('photos') as Record<string, PhotoData>
     const oldData = photos[filePath] || { tags: [], rating: 0, description: '', notes: '' }
     photos[filePath] = data
@@ -556,6 +592,9 @@ ipcMain.handle('store:setTagGroups', (_event, groups: TagGroup[]) => {
 
 ipcMain.handle('store:setLastFolder', (_event, folder: string) => {
   try {
+    if (typeof folder !== 'string' || !path.isAbsolute(folder)) {
+      return { success: false, error: 'Invalid folder path' }
+    }
     store.set('lastFolder', folder)
     return { success: true }
   } catch (err: any) {
@@ -592,6 +631,10 @@ ipcMain.handle('fs:readSubdirectories', async (_event, dirPath: string) => {
 // counts (the tags themselves don't change, only the path key does).
 ipcMain.handle('store:renamePhotoPath', (_event, oldPath: string, newPath: string) => {
   try {
+    if (typeof oldPath !== 'string' || typeof newPath !== 'string' ||
+        !path.isAbsolute(oldPath) || !path.isAbsolute(newPath)) {
+      return { success: false, error: 'Paths must be absolute' }
+    }
     const photos = store.get('photos') as Record<string, PhotoData>
     if (photos[oldPath]) {
       photos[newPath] = photos[oldPath]

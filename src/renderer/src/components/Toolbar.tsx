@@ -5,7 +5,9 @@ import type { SortField, SortDir, ViewMode } from '../types'
 export default function Toolbar() {
   const {
     currentFolder,
+    photos,
     selectedPaths,
+    filteredPhotos,
     sortBy,
     sortDir,
     viewMode,
@@ -59,6 +61,17 @@ export default function Toolbar() {
         <div className="toolbar-path" title={currentFolder || ''}>
           {currentFolder || 'No folder selected'}
         </div>
+
+        {/* Select All — visible whenever photos are loaded */}
+        {filteredPhotos.length > 0 && (
+          <button
+            className="btn btn-ghost btn-sm toolbar-select-all"
+            onClick={selectAll}
+            title={`Select all ${filteredPhotos.length} photo${filteredPhotos.length !== 1 ? 's' : ''}`}
+          >
+            Select All
+          </button>
+        )}
 
         {/* Right side controls */}
         <div className="toolbar-right">

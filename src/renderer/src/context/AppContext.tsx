@@ -262,6 +262,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSelectedPaths(new Set())
     setActivePhotoState(null)
     setFilterTags([])
+    setActiveGroupId(null)
     lastClickedPath.current = null
     await window.api.setLastFolder(folder)
     await loadFolder(folder)
@@ -355,8 +356,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       setPhotoData((prev) => ({ ...prev, [filePath]: updated }))
 
-      await window.api.setPhotoData(filePath, updated)
-      await refreshTags()
+      try {
+        await window.api.setPhotoData(filePath, updated)
+        await refreshTags()
+      } catch (err) {
+        console.error('Failed to save photo data:', err)
+      }
     },
     [refreshTags] // photoData removed — read via stable ref to avoid recreating on every render
   )
