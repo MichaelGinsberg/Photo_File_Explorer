@@ -1,4 +1,4 @@
-import type { Photo, PhotoData, ExifData } from './types'
+import type { Photo, PhotoData, ExifData, TagGroup } from './types'
 
 interface ApiResponse<T = undefined> {
   success: boolean
@@ -41,6 +41,12 @@ declare global {
       getAllPhotoData(): Promise<ApiResponse<Record<string, PhotoData>>>
       renamePhotoPath(oldPath: string, newPath: string): Promise<ApiResponse<undefined>>
       getLastFolder(): Promise<ApiResponse<string | null>>
+      setLastFolder(folder: string): Promise<ApiResponse<undefined>>
+      readSubdirectories(dirPath: string): Promise<ApiResponse<string[]>>
+
+      // Tag groups
+      getTagGroups(): Promise<ApiResponse<TagGroup[]>>
+      setTagGroups(groups: TagGroup[]): Promise<ApiResponse<undefined>>
 
       // Shell
       openExternal(url: string): Promise<ApiResponse<undefined>>

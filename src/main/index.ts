@@ -29,10 +29,18 @@ interface PhotoData {
   location: string
 }
 
+interface TagGroup {
+  id: string
+  name: string
+  tags: string[]
+  color: string
+}
+
 interface StoreSchema {
   photos: Record<string, PhotoData>
   allTags: Record<string, number>
   lastFolder: string | null
+  tagGroups: TagGroup[]
 }
 
 // ─── electron-store ───────────────────────────────────────────────────────────
@@ -41,7 +49,8 @@ const store = new Store<StoreSchema>({
   defaults: {
     photos: {},
     allTags: {},
-    lastFolder: null
+    lastFolder: null,
+    tagGroups: []
   }
 })
 
@@ -481,6 +490,56 @@ ipcMain.handle('store:getAllPhotoData', () => {
 ipcMain.handle('store:getLastFolder', () => {
   try {
     return { success: true, data: store.get('lastFolder') as string | null }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('store:getTagGroups', () => {
+  try {
+    return { success: true, data: store.get('tagGroups') as TagGroup[] }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('store:setTagGroups', (_event, groups: TagGroup[]) => {
+  try {
+    store.set('tagGroups', groups)
+    return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('store:setLastFolder', (_event, folder: string) => {
+  try {
+    store.set('lastFolder', folder)
+    return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('fs:readSubdirectories', async (_event, dirPath: string) => {
+  try {
+    const entries = await fs.promises.readdir(dirPath)
+    const settled = await Promise.all(
+      entries
+        .filter(e => !e.startsWith('.'))
+        .map(async (entry): Promise<string | null> => {
+          const fullPath = path.join(dirPath, entry)
+          try {
+            const stat = await fs.promises.lstat(fullPath)
+            return stat.isDirectory() ? fullPath : null
+          } catch {
+            return null
+          }
+        })
+    )
+    const dirs = settled.filter((d): d is string => d !== null)
+    dirs.sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
+    return { success: true, data: dirs }
   } catch (err: any) {
     return { success: false, error: err.message }
   }

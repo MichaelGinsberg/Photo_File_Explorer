@@ -26,6 +26,8 @@ A cross-platform desktop application for browsing, tagging, and organizing photo
 | **Sort & filter** | Sort by name, date modified, date taken, file size, or location; filter by one or more tags |
 | **Rename** | Single rename or bulk rename with pattern variables (`{name}`, `{counter:3}`, `{date:YYYY-MM-DD}`) |
 | **Move & copy** | Move or copy selected photos to any folder, with optional new subfolder creation |
+| **Drag & drop** | Drag photo files from Windows Explorer or Finder directly onto the photo grid to copy them into the current folder; a visual overlay confirms the drop target and a toast reports the result |
+| **Tag groups** | Create named groups that bundle multiple tags together; clicking a group in the sidebar filters the grid to photos that have any one of the group's tags (OR logic); groups are created and edited via a modal with a tag picker; group match counts update live |
 | **Nord theme** | Full Nord dark palette throughout the UI |
 | **Native window** | Custom frameless title bar on Windows; native traffic lights on macOS |
 

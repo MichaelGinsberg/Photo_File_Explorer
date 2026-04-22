@@ -15,7 +15,8 @@ import type {
   SortDir,
   ViewMode,
   TagInfo,
-  RenameEntry
+  RenameEntry,
+  TagGroup
 } from '../types'
 
 // ─── Context shape ────────────────────────────────────────────────────────────
@@ -30,6 +31,10 @@ interface AppContextValue {
   exifCache: Record<string, ExifData>
   allTags: TagInfo[]
   filterTags: string[]
+  tagGroups: TagGroup[]
+  activeGroupId: string | null
+  showTagGroupModal: boolean
+  editingGroup: TagGroup | null
   sortBy: SortField
   sortDir: SortDir
   viewMode: ViewMode
@@ -41,9 +46,11 @@ interface AppContextValue {
 
   // Computed
   filteredPhotos: Photo[]
+  tagColorMap: Record<string, string>
 
   // Actions
   openFolder(): Promise<void>
+  navigateToFolder(folder: string): Promise<void>
   selectPhoto(photo: Photo, event: React.MouseEvent): void
   selectAll(): void
   deselectAll(): void
@@ -51,6 +58,10 @@ interface AppContextValue {
   loadExif(filePath: string): Promise<void>
   updatePhotoData(filePath: string, data: Partial<PhotoData>): Promise<void>
   toggleFilterTag(tag: string): void
+  setActiveGroupId(id: string | null): void
+  saveTagGroups(groups: TagGroup[]): Promise<void>
+  setShowTagGroupModal(show: boolean): void
+  setEditingGroup(group: TagGroup | null): void
   renameFiles(renames: RenameEntry[]): Promise<void>
   moveFiles(destDir: string, copy: boolean): Promise<void>
   refreshFolder(): Promise<void>
@@ -93,6 +104,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   photoDataRef.current = photoData
   const [allTags, setAllTags] = useState<TagInfo[]>([])
   const [filterTags, setFilterTags] = useState<string[]>([])
+  const [tagGroups, setTagGroups] = useState<TagGroup[]>([])
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
+  const [showTagGroupModal, setShowTagGroupModal] = useState(false)
+  const [editingGroup, setEditingGroup] = useState<TagGroup | null>(null)
   const [sortBy, setSortBy] = useState<SortField>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -120,24 +135,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Refresh all tags from store
+  // Refresh all tags + groups from store
   const refreshTags = useCallback(async () => {
-    const res = await window.api.getAllTags()
-    if (res.success && res.data) setAllTags(res.data)
+    const [tagsRes, groupsRes] = await Promise.all([
+      window.api.getAllTags(),
+      window.api.getTagGroups()
+    ])
+    if (tagsRes.success && tagsRes.data) setAllTags(tagsRes.data)
+    if (groupsRes.success && groupsRes.data) setTagGroups(groupsRes.data)
   }, [])
+
+  // ─── Computed: tagColorMap ─────────────────────────────────────────────────
+  // Maps each tag name to the color of its first group. Tags not in any group
+  // are absent from the map; consumers should fall back to DEFAULT_TAG_COLOR.
+
+  const tagColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const group of tagGroups) {
+      if (!group.color) continue
+      for (const tag of group.tags) {
+        if (!map[tag]) map[tag] = group.color
+      }
+    }
+    return map
+  }, [tagGroups])
 
   // ─── Computed: filteredPhotos ───────────────────────────────────────────────
 
   const filteredPhotos = useMemo(() => {
     let list = [...photos]
 
-    // Filter by selected tags
+    // Filter by selected tags (AND — photo must have every selected tag)
     if (filterTags.length > 0) {
       list = list.filter((photo) => {
         const data = photoData[photo.path]
         if (!data || !data.tags) return false
         return filterTags.every((tag) => data.tags.includes(tag))
       })
+    }
+
+    // Filter by active group (OR — photo must have at least one group tag)
+    if (activeGroupId) {
+      const group = tagGroups.find(g => g.id === activeGroupId)
+      if (group && group.tags.length > 0) {
+        list = list.filter((photo) => {
+          const data = photoData[photo.path]
+          if (!data?.tags) return false
+          return group.tags.some(t => data.tags.includes(t))
+        })
+      }
     }
 
     // Sort
@@ -161,7 +207,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })
 
     return list
-  }, [photos, photoData, filterTags, sortBy, sortDir])
+  }, [photos, photoData, filterTags, activeGroupId, tagGroups, sortBy, sortDir])
 
   // ─── loadFolder (must be defined before openFolder) ───────────────────────
 
@@ -206,6 +252,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActivePhotoState(null)
     setFilterTags([])
     lastClickedPath.current = null
+    await loadFolder(folder)
+  }, [loadFolder])
+
+  // ─── navigateToFolder ──────────────────────────────────────────────────────
+
+  const navigateToFolder = useCallback(async (folder: string) => {
+    setCurrentFolder(folder)
+    setSelectedPaths(new Set())
+    setActivePhotoState(null)
+    setFilterTags([])
+    lastClickedPath.current = null
+    await window.api.setLastFolder(folder)
     await loadFolder(folder)
   }, [loadFolder])
 
@@ -309,6 +367,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setFilterTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     )
+  }, [])
+
+  // ─── saveTagGroups ─────────────────────────────────────────────────────────
+
+  const saveTagGroups = useCallback(async (groups: TagGroup[]) => {
+    await window.api.setTagGroups(groups)
+    setTagGroups(groups)
   }, [])
 
   // ─── renameFiles ───────────────────────────────────────────────────────────
@@ -435,6 +500,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     exifCache,
     allTags,
     filterTags,
+    tagGroups,
+    activeGroupId,
+    showTagGroupModal,
+    editingGroup,
     sortBy,
     sortDir,
     viewMode,
@@ -444,7 +513,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isCopyMode,
     platform,
     filteredPhotos,
+    tagColorMap,
     openFolder,
+    navigateToFolder,
     selectPhoto,
     selectAll,
     deselectAll,
@@ -452,6 +523,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadExif,
     updatePhotoData,
     toggleFilterTag,
+    setActiveGroupId,
+    saveTagGroups,
+    setShowTagGroupModal,
+    setEditingGroup,
     renameFiles,
     moveFiles,
     refreshFolder,

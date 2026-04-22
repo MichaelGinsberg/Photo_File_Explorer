@@ -56,3 +56,10 @@ export interface RenameEntry {
   path: string
   newName: string
 }
+
+export interface TagGroup {
+  id: string
+  name: string
+  tags: string[]
+  color: string  // hex color from GROUP_COLORS palette
+}

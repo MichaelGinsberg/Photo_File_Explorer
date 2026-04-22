@@ -16,7 +16,7 @@ function formatExposure(val: number): string {
   return `1/${Math.round(1 / val)}s`
 }
 
-const TAG_COLORS = ['var(--nord15)', 'var(--nord8)', 'var(--nord14)', 'var(--nord7)', 'var(--nord9)']
+import { DEFAULT_TAG_COLOR, hexToRgba } from '../tagColors'
 
 export default function MetadataPanel() {
   const {
@@ -28,7 +28,8 @@ export default function MetadataPanel() {
     loadExif,
     setShowMoveModal,
     setShowRenameModal,
-    setIsCopyMode
+    setIsCopyMode,
+    tagColorMap
   } = useApp()
 
   const [newTag, setNewTag] = useState('')
@@ -274,38 +275,45 @@ export default function MetadataPanel() {
           {/* Top used tags (quick-add) */}
           {topTags.length > 0 && (
             <div className="top-tags">
-              {topTags.map(tag => (
-                <button
-                  key={tag.name}
-                  className="top-tag-chip"
-                  onClick={() => handleTopTagClick(tag.name)}
-                  title={`Add "${tag.name}" · used ${tag.count}×`}
-                >
-                  + {tag.name}
-                </button>
-              ))}
+              {topTags.map(tag => {
+                const color = tagColorMap[tag.name] ?? DEFAULT_TAG_COLOR
+                return (
+                  <button
+                    key={tag.name}
+                    className="top-tag-chip"
+                    style={{ borderColor: color, color }}
+                    onClick={() => handleTopTagClick(tag.name)}
+                    title={`Add "${tag.name}" · used ${tag.count}×`}
+                  >
+                    + {tag.name}
+                  </button>
+                )
+              })}
             </div>
           )}
 
           {/* Applied tags */}
           <div className="tag-chips">
-            {data.tags.map((tag, i) => (
-              <span
-                key={tag}
-                className="tag-chip"
-                style={{ borderColor: TAG_COLORS[i % TAG_COLORS.length] }}
-              >
-                <span className="tag-chip-dot" style={{ background: TAG_COLORS[i % TAG_COLORS.length] }} />
-                {tag}
-                <button
-                  className="tag-chip-remove"
-                  onClick={() => handleRemoveTag(tag)}
-                  aria-label={`Remove tag ${tag}`}
+            {data.tags.map((tag) => {
+              const color = tagColorMap[tag] ?? DEFAULT_TAG_COLOR
+              return (
+                <span
+                  key={tag}
+                  className="tag-chip"
+                  style={{ borderColor: color, background: hexToRgba(color, 0.1) }}
                 >
-                  ×
-                </button>
-              </span>
-            ))}
+                  <span className="tag-chip-dot" style={{ background: color }} />
+                  {tag}
+                  <button
+                    className="tag-chip-remove"
+                    onClick={() => handleRemoveTag(tag)}
+                    aria-label={`Remove tag ${tag}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              )
+            })}
           </div>
 
           {/* Input with autocomplete */}

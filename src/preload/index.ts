@@ -19,6 +19,13 @@ interface PhotoData {
   location: string
 }
 
+interface TagGroup {
+  id: string
+  name: string
+  tags: string[]
+  color: string
+}
+
 interface ExifData {
   make?: string
   model?: string
@@ -101,6 +108,19 @@ const api = {
 
   getLastFolder: (): Promise<ApiResponse<string | null>> =>
     ipcRenderer.invoke('store:getLastFolder'),
+
+  setLastFolder: (folder: string): Promise<ApiResponse<undefined>> =>
+    ipcRenderer.invoke('store:setLastFolder', folder),
+
+  readSubdirectories: (dirPath: string): Promise<ApiResponse<string[]>> =>
+    ipcRenderer.invoke('fs:readSubdirectories', dirPath),
+
+  // Tag groups
+  getTagGroups: (): Promise<ApiResponse<TagGroup[]>> =>
+    ipcRenderer.invoke('store:getTagGroups'),
+
+  setTagGroups: (groups: TagGroup[]): Promise<ApiResponse<undefined>> =>
+    ipcRenderer.invoke('store:setTagGroups', groups),
 
   // Shell
   openExternal: (url: string): Promise<ApiResponse<undefined>> =>
