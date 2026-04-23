@@ -16,8 +16,6 @@ export default function PhotoGrid() {
     deselectAll
   } = useApp()
 
-  const hasAnySelected = selectedPaths.size > 0
-
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -84,9 +82,11 @@ export default function PhotoGrid() {
     )
   }
 
+  const hasSelection = selectedPaths.size > 0
+
   return (
     <div
-      className={viewMode === 'grid' ? 'photo-grid' : 'photo-list'}
+      className={`${viewMode === 'grid' ? 'photo-grid' : 'photo-list'}${hasSelection ? ' has-selection' : ''}`}
       onClick={handleGridClick}
     >
       {filteredPhotos.map((photo) => (
@@ -95,7 +95,6 @@ export default function PhotoGrid() {
           photo={photo}
           isSelected={selectedPaths.has(photo.path)}
           isActive={activePhoto?.path === photo.path}
-          hasAnySelected={hasAnySelected}
           viewMode={viewMode}
           onSelect={selectPhoto}
           onActivate={setActivePhoto}

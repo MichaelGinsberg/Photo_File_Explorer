@@ -6,7 +6,6 @@ interface PhotoItemProps {
   photo: Photo
   isSelected: boolean
   isActive: boolean
-  hasAnySelected: boolean
   viewMode: 'grid' | 'list'
   onSelect: (photo: Photo, event: React.MouseEvent) => void
   onActivate: (photo: Photo) => void
@@ -46,7 +45,6 @@ function PhotoItem({
   photo,
   isSelected,
   isActive,
-  hasAnySelected,
   viewMode,
   onSelect,
   onActivate
@@ -179,7 +177,7 @@ function PhotoItem({
 
         {/* Checkbox */}
         <div
-          className={`photo-checkbox ${isSelected || hasAnySelected ? 'visible' : ''}`}
+          className={`photo-checkbox ${isSelected ? 'visible' : ''}`}
           onClick={handleCheckboxClick}
         >
           <div className={`checkbox ${isSelected ? 'checked' : ''}`}>

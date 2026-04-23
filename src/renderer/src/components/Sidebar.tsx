@@ -10,6 +10,14 @@ interface ContextMenu {
 
 const INVALID_FOLDER_CHARS = /[/\\*?"<>|:\x00]/
 
+function FolderIcon({ size = 13, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+      <path d="M.54 3.87L.5 3a2 2 0 012-2h3.19a2 2 0 011.45.63l.33.37H14a2 2 0 012 2v8.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 010 12.5V3.87z"/>
+    </svg>
+  )
+}
+
 export default function Sidebar() {
   const {
     allTags, filterTags, filteredPhotos, photos, photoData,
@@ -221,12 +229,6 @@ export default function Sidebar() {
   const folderName = currentFolder
     ? currentFolder.split(/[\\/]/).filter(Boolean).pop() ?? currentFolder
     : null
-
-  const FolderIcon = ({ size = 13, className = '' }: { size?: number; className?: string }) => (
-    <svg className={className} width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
-      <path d="M.54 3.87L.5 3a2 2 0 012-2h3.19a2 2 0 011.45.63l.33.37H14a2 2 0 012 2v8.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 010 12.5V3.87z"/>
-    </svg>
-  )
 
   return (
     <aside className="sidebar">

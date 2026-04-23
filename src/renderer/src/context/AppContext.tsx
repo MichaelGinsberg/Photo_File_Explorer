@@ -94,6 +94,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const exifCacheRef = useRef<Record<string, ExifData>>({})
   const photoDataRef = useRef<Record<string, PhotoData>>({})
   const filteredPhotosRef = useRef<Photo[]>([])
+  // Incremented on every folder load; checked before applying results so that
+  // a slow earlier load cannot overwrite the results of a later navigation.
+  const folderLoadGenRef = useRef(0)
 
   const [currentFolder, setCurrentFolder] = useState<string | null>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -161,6 +164,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return map
   }, [tagGroups])
 
+  // ─── Computed: photoTagSets ────────────────────────────────────────────────
+  // Pre-built Sets for each photo's tags. Rebuilt only when photoData changes,
+  // so filteredPhotos can reuse them across filter/sort changes without
+  // re-allocating a Set per photo on every filter interaction.
+
+  const photoTagSets = useMemo(() => {
+    const sets: Record<string, Set<string>> = {}
+    for (const [p, data] of Object.entries(photoData)) {
+      sets[p] = new Set(data.tags)
+    }
+    return sets
+  }, [photoData])
+
   // ─── Computed: filteredPhotos ───────────────────────────────────────────────
 
   const filteredPhotos = useMemo(() => {
@@ -169,10 +185,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Filter by selected tags (AND — photo must have every selected tag)
     if (filterTags.length > 0) {
       list = list.filter((photo) => {
-        const tags = photoData[photo.path]?.tags
-        if (!tags) return false
-        const tagSet = new Set(tags)
-        return filterTags.every((tag) => tagSet.has(tag))
+        const tagSet = photoTagSets[photo.path]
+        return !!tagSet && filterTags.every(tag => tagSet.has(tag))
       })
     }
 
@@ -182,8 +196,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (group && group.tags.length > 0) {
         const groupTagSet = new Set(group.tags)
         list = list.filter((photo) => {
-          const tags = photoData[photo.path]?.tags
-          return !!tags && tags.some(t => groupTagSet.has(t))
+          const tagSet = photoTagSets[photo.path]
+          return !!tagSet && group.tags.some(t => tagSet.has(t))
         })
       }
     }
@@ -209,19 +223,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })
 
     return list
-  }, [photos, photoData, filterTags, activeGroupId, tagGroups, sortBy, sortDir])
+  }, [photos, photoData, photoTagSets, filterTags, activeGroupId, tagGroups, sortBy, sortDir])
 
   filteredPhotosRef.current = filteredPhotos
 
   // ─── loadFolder (must be defined before openFolder) ───────────────────────
 
   const loadFolder = useCallback(async (folder: string) => {
+    const gen = ++folderLoadGenRef.current
     setIsLoading(true)
     try {
       const [dirRes, allDataRes] = await Promise.all([
         window.api.readDirectory(folder),
         window.api.getAllPhotoData()
       ])
+
+      // A newer navigation started while we were awaiting — discard stale results
+      if (gen !== folderLoadGenRef.current) return
 
       if (!dirRes.success || !dirRes.data) {
         setPhotos([])
@@ -240,7 +258,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       await refreshTags()
     } finally {
-      setIsLoading(false)
+      if (gen === folderLoadGenRef.current) setIsLoading(false)
     }
   }, [refreshTags])
 
@@ -364,10 +382,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await window.api.setPhotoData(filePath, updated)
         await refreshTags()
       } catch (err) {
+        // Revert the optimistic update so the UI reflects the actual persisted state
+        setPhotoData((prev) => ({ ...prev, [filePath]: current }))
         console.error('Failed to save photo data:', err)
       }
     },
-    [refreshTags] // photoData removed — read via stable ref to avoid recreating on every render
+    [refreshTags]
   )
 
   // ─── toggleFilterTag ───────────────────────────────────────────────────────

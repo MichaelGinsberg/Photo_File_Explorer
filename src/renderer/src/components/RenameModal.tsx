@@ -12,6 +12,10 @@ function getBase(name: string): string {
   return idx >= 0 ? name.slice(0, idx) : name
 }
 
+const RE_NAME = /\{name\}/g
+const RE_COUNTER = /\{counter(?::(\d+))?\}/g
+const RE_DATE = /\{date(?::([^}]+))?\}/g
+
 function applyBulkPattern(
   pattern: string,
   name: string,
@@ -20,17 +24,14 @@ function applyBulkPattern(
 ): string {
   let result = pattern
 
-  // {name} → original name without extension
-  result = result.replace(/\{name\}/g, getBase(name))
+  result = result.replace(RE_NAME, getBase(name))
 
-  // {counter} or {counter:N} → zero-padded counter
-  result = result.replace(/\{counter(?::(\d+))?\}/g, (_match, width) => {
+  result = result.replace(RE_COUNTER, (_match, width) => {
     const w = parseInt(width || '1', 10)
     return String(index + 1).padStart(w, '0')
   })
 
-  // {date} or {date:FORMAT}
-  result = result.replace(/\{date(?::([^}]+))?\}/g, (_match, fmt) => {
+  result = result.replace(RE_DATE, (_match, fmt) => {
     if (!fmt) return date.toISOString().slice(0, 10)
     let d = fmt
     d = d.replaceAll('YYYY', String(date.getFullYear()))
@@ -91,8 +92,8 @@ export default function RenameModal() {
       setIsProcessing(true)
       try {
         await renameFiles([{ path: singlePhoto.path, newName }])
-      } catch (err: any) {
-        setError(err.message)
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : String(err))
       } finally {
         setIsProcessing(false)
       }
@@ -110,8 +111,8 @@ export default function RenameModal() {
           return { path: photo.path, newName: newBase + ext }
         })
         await renameFiles(renames)
-      } catch (err: any) {
-        setError(err.message)
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : String(err))
       } finally {
         setIsProcessing(false)
       }

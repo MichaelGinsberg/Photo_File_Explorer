@@ -54,9 +54,18 @@ const store = new Store<StoreSchema>({
   }
 })
 
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 // ─── exifr module cache ───────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let exifrLib: any = null
+
+// ─── EXIF result cache ────────────────────────────────────────────────────────
+// Maps absolute file paths to their parsed raw EXIF data. Avoids re-reading
+// and re-parsing files the renderer has already requested. Cleared on app exit.
+const rawExifCache = new Map<string, unknown>()
 
 // ─── MIME types for photo extensions ─────────────────────────────────────────
 
@@ -255,8 +264,8 @@ ipcMain.handle('dialog:openFolder', async () => {
     const folder = result.filePaths[0]
     store.set('lastFolder', folder)
     return { success: true, data: folder }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -314,8 +323,8 @@ ipcMain.handle('fs:readDirectory', async (_event, dirPath: string) => {
     const photos = settled.filter((p): p is Photo => p !== null)
     photos.sort((a, b) => a.name.localeCompare(b.name))
     return { success: true, data: photos }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -330,15 +339,22 @@ ipcMain.handle('fs:getExifData', async (_event, filePath: string) => {
     }
     // Use pre-warmed module if available, otherwise import and cache now
     const exifr = exifrLib ?? (exifrLib = await import('exifr'))
-    const raw = await Promise.race([
-      exifr.default.parse(filePath, {
-        tiff: true, exif: true, gps: true,
-        icc: false, iptc: false, jfif: false, ihdr: true
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('EXIF parsing timed out')), 8000)
-      )
-    ])
+
+    let raw: unknown
+    if (rawExifCache.has(filePath)) {
+      raw = rawExifCache.get(filePath)
+    } else {
+      raw = await Promise.race([
+        exifr.default.parse(filePath, {
+          tiff: true, exif: true, gps: true,
+          icc: false, iptc: false, jfif: false, ihdr: true
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('EXIF parsing timed out')), 8000)
+        )
+      ])
+      if (raw) rawExifCache.set(filePath, raw)
+    }
 
     if (!raw) return { success: true, data: {} }
 
@@ -364,8 +380,8 @@ ipcMain.handle('fs:getExifData', async (_event, filePath: string) => {
     }
 
     return { success: true, data: exifData }
-  } catch (err: any) {
-    return { success: false, error: err.message, data: {} }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err), data: {} }
   }
 })
 
@@ -383,10 +399,25 @@ ipcMain.handle('fs:renameFile', async (_event, oldPath: string, newPath: string)
     }
     await fs.promises.rename(oldPath, newPath)
     return { success: true, data: newPath }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
+
+// Run tasks with at most `limit` in flight at once, preserving result order.
+async function withConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<unknown>
+): Promise<Awaited<ReturnType<typeof fn>>[]> {
+  const results: Awaited<ReturnType<typeof fn>>[] = []
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit)
+    const batchResults = await Promise.all(batch.map(fn))
+    results.push(...batchResults)
+  }
+  return results
+}
 
 async function destExists(p: string): Promise<boolean> {
   try {
@@ -398,7 +429,7 @@ async function destExists(p: string): Promise<boolean> {
 }
 
 ipcMain.handle('fs:moveFiles', async (_event, filePaths: string[], destDir: string) => {
-  const results = await Promise.all(filePaths.map(async (filePath) => {
+  const results = await withConcurrency(filePaths, 16, async (filePath) => {
     const fileName = path.basename(filePath)
     const destPath = path.join(destDir, fileName)
     if (await destExists(destPath)) {
@@ -432,7 +463,7 @@ ipcMain.handle('fs:moveFiles', async (_event, filePaths: string[], destDir: stri
 })
 
 ipcMain.handle('fs:copyFiles', async (_event, filePaths: string[], destDir: string) => {
-  const results = await Promise.all(filePaths.map(async (filePath) => {
+  const results = await withConcurrency(filePaths, 16, async (filePath) => {
     const fileName = path.basename(filePath)
     const destPath = path.join(destDir, fileName)
     if (await destExists(destPath)) {
@@ -441,8 +472,8 @@ ipcMain.handle('fs:copyFiles', async (_event, filePaths: string[], destDir: stri
     try {
       await fs.promises.copyFile(filePath, destPath)
       return { path: filePath, success: true, newPath: destPath }
-    } catch (err: any) {
-      return { path: filePath, success: false, error: err.message as string }
+    } catch (err: unknown) {
+      return { path: filePath, success: false, error: errMsg(err) }
     }
   }))
   return { success: true, data: results }
@@ -455,8 +486,8 @@ ipcMain.handle('fs:createDirectory', async (_event, dirPath: string) => {
     }
     await fs.promises.mkdir(dirPath, { recursive: true })
     return { success: true, data: dirPath }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -469,8 +500,8 @@ ipcMain.handle('fs:browseDestination', async () => {
       return { success: true, data: null }
     }
     return { success: true, data: result.filePaths[0] }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -481,8 +512,8 @@ ipcMain.handle('store:getPhotoData', (_event, filePath: string) => {
     const photos = store.get('photos') as Record<string, PhotoData>
     const data = photos[filePath] || { tags: [], rating: 0, description: '', notes: '', date: '', location: '' }
     return { success: true, data }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -535,8 +566,8 @@ ipcMain.handle('store:setPhotoData', (_event, filePath: string, data: PhotoData)
 
     store.set('allTags', allTags)
     return { success: true }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -547,8 +578,8 @@ ipcMain.handle('store:getAllTags', () => {
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => a.name.localeCompare(b.name))
     return { success: true, data: tags }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -560,8 +591,8 @@ ipcMain.handle('shell:openExternal', async (_event, url: string) => {
     }
     await shell.openExternal(url)
     return { success: true }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -569,24 +600,24 @@ ipcMain.handle('store:getAllPhotoData', () => {
   try {
     const photos = store.get('photos') as Record<string, PhotoData>
     return { success: true, data: photos }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
 ipcMain.handle('store:getLastFolder', () => {
   try {
     return { success: true, data: store.get('lastFolder') as string | null }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
 ipcMain.handle('store:getTagGroups', () => {
   try {
     return { success: true, data: store.get('tagGroups') as TagGroup[] }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -616,8 +647,8 @@ ipcMain.handle('store:setTagGroups', (_event, groups: unknown) => {
     }
     store.set('tagGroups', groups as TagGroup[])
     return { success: true }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -628,13 +659,16 @@ ipcMain.handle('store:setLastFolder', (_event, folder: string) => {
     }
     store.set('lastFolder', folder)
     return { success: true }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
 ipcMain.handle('fs:readSubdirectories', async (_event, dirPath: string) => {
   try {
+    if (typeof dirPath !== 'string' || !path.isAbsolute(dirPath)) {
+      return { success: false, error: 'Path must be absolute' }
+    }
     const entries = await fs.promises.readdir(dirPath)
     const settled = await Promise.all(
       entries
@@ -652,8 +686,8 @@ ipcMain.handle('fs:readSubdirectories', async (_event, dirPath: string) => {
     const dirs = settled.filter((d): d is string => d !== null)
     dirs.sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
     return { success: true, data: dirs }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -679,8 +713,8 @@ ipcMain.handle('fs:moveFolder', async (_event, oldPath: string, newPath: string)
     }
     await fs.promises.rename(oldPath, newPath)
     return { success: true, data: newPath }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -707,8 +741,8 @@ ipcMain.handle('store:renameFolderPath', (_event, oldPrefix: string, newPrefix: 
     }
     if (changed) store.set('photos', updated)
     return { success: true }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })
 
@@ -728,7 +762,7 @@ ipcMain.handle('store:renamePhotoPath', (_event, oldPath: string, newPath: strin
       store.set('photos', photos)
     }
     return { success: true }
-  } catch (err: any) {
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
   }
 })

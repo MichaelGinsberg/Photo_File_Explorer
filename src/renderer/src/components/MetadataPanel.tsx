@@ -20,6 +20,8 @@ function formatExposure(val: number): string {
 
 import { DEFAULT_TAG_COLOR, hexToRgba } from '../tagColors'
 
+const STAR_RATINGS = [1, 2, 3, 4, 5]
+
 export default function MetadataPanel() {
   const {
     activePhoto,
@@ -76,8 +78,9 @@ export default function MetadataPanel() {
   const suggestions = useMemo(() => {
     if (!newTag.trim() || !data) return []
     const lower = newTag.trim().toLowerCase()
+    const existingSet = new Set(data.tags)
     return allTags
-      .filter(t => t.name.includes(lower) && !data.tags.includes(t.name))
+      .filter(t => t.name.includes(lower) && !existingSet.has(t.name))
       .slice(0, 8)
   }, [newTag, allTags, data])
 
@@ -305,7 +308,7 @@ export default function MetadataPanel() {
         <div className="metadata-section">
           <div className="metadata-section-title">Rating</div>
           <div className="star-rating">
-            {[1, 2, 3, 4, 5].map((star) => (
+            {STAR_RATINGS.map((star) => (
               <button
                 key={star}
                 className={`star-btn ${star <= (data.rating || 0) ? 'filled' : ''}`}
