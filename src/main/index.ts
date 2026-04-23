@@ -691,6 +691,19 @@ ipcMain.handle('fs:readSubdirectories', async (_event, dirPath: string) => {
   }
 })
 
+ipcMain.handle('fs:countPhotosInDirectory', async (_event, dirPath: string) => {
+  try {
+    if (typeof dirPath !== 'string' || !path.isAbsolute(dirPath)) {
+      return { success: false, error: 'Path must be absolute' }
+    }
+    const entries = await fs.promises.readdir(dirPath)
+    const count = entries.filter(e => PHOTO_EXTENSIONS.has(path.extname(e).toLowerCase())).length
+    return { success: true, data: count }
+  } catch (err: unknown) {
+    return { success: false, error: errMsg(err) }
+  }
+})
+
 ipcMain.handle('fs:moveFolder', async (_event, oldPath: string, newPath: string) => {
   try {
     if (typeof oldPath !== 'string' || typeof newPath !== 'string' ||

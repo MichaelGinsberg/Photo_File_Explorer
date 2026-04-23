@@ -28,6 +28,7 @@ export default function MetadataPanel() {
     photoData,
     exifCache,
     allTags,
+    selectedPaths,
     updatePhotoData,
     loadExif,
     setShowMoveModal,
@@ -72,6 +73,14 @@ export default function MetadataPanel() {
       loadExif(photo.path)
     }
   }, [photo, exifOpen, exif, loadExif])
+
+  // Auto-populate date from EXIF when it arrives and the field is still empty
+  useEffect(() => {
+    if (!photo || !data || data.date || !exif?.dateISO) return
+    setDateValue(exif.dateISO)
+    updatePhotoData(photo.path, { date: exif.dateISO })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exif?.dateISO, photo?.path])
 
   // ── Tag autocomplete ────────────────────────────────────────────────────────
 
@@ -145,18 +154,33 @@ export default function MetadataPanel() {
     [photo, data, updatePhotoData]
   )
 
+  // Applies a tag to all selected photos (or just the active one when only one is selected).
+  const applyTagToSelection = useCallback(
+    (tag: string) => {
+      if (selectedPaths.size > 1) {
+        for (const path of selectedPaths) {
+          const pd = photoData[path]
+          if (pd && !pd.tags.includes(tag)) {
+            updatePhotoData(path, { tags: [...pd.tags, tag] })
+          }
+        }
+      } else if (photo && data && !data.tags.includes(tag)) {
+        updatePhotoData(photo.path, { tags: [...data.tags, tag] })
+      }
+    },
+    [selectedPaths, photoData, photo, data, updatePhotoData]
+  )
+
   const handleAddTag = useCallback(() => {
     if (!photo || !data || !newTag.trim()) return
     // Normalise: lowercase, collapse whitespace, strip control characters
     const tag = newTag.trim().toLowerCase().replace(/[\x00-\x1f\x7f]/g, '').replace(/\s+/g, ' ')
     if (!tag || tag.length > 200) return
-    if (!data.tags.includes(tag)) {
-      updatePhotoData(photo.path, { tags: [...data.tags, tag] })
-    }
+    applyTagToSelection(tag)
     setNewTag('')
     setHighlightedSugg(-1)
     tagInputRef.current?.focus()
-  }, [photo, data, newTag, updatePhotoData])
+  }, [photo, data, newTag, applyTagToSelection])
 
   const handleRemoveTag = useCallback(
     (tag: string) => {
@@ -168,26 +192,22 @@ export default function MetadataPanel() {
 
   const handleTopTagClick = useCallback(
     (tagName: string) => {
-      if (!photo || !data) return
-      if (!data.tags.includes(tagName)) {
-        updatePhotoData(photo.path, { tags: [...data.tags, tagName] })
-      }
+      if (!photo) return
+      applyTagToSelection(tagName)
     },
-    [photo, data, updatePhotoData]
+    [photo, applyTagToSelection]
   )
 
   const handleSuggestionMouseDown = useCallback(
     (e: React.MouseEvent, tagName: string) => {
       e.preventDefault() // prevent input blur before click registers
-      if (!photo || !data) return
-      if (!data.tags.includes(tagName)) {
-        updatePhotoData(photo.path, { tags: [...data.tags, tagName] })
-      }
+      if (!photo) return
+      applyTagToSelection(tagName)
       setNewTag('')
       setHighlightedSugg(-1)
       tagInputRef.current?.focus()
     },
-    [photo, data, updatePhotoData]
+    [photo, applyTagToSelection]
   )
 
   const handleTagKeyDown = (e: React.KeyboardEvent) => {
@@ -203,10 +223,7 @@ export default function MetadataPanel() {
     } else if (e.key === 'Enter') {
       e.preventDefault()
       if (highlightedSugg >= 0 && suggestions[highlightedSugg]) {
-        const tag = suggestions[highlightedSugg].name
-        if (photo && data && !data.tags.includes(tag)) {
-          updatePhotoData(photo.path, { tags: [...data.tags, tag] })
-        }
+        applyTagToSelection(suggestions[highlightedSugg].name)
         setNewTag('')
         setHighlightedSugg(-1)
       } else {
@@ -323,7 +340,12 @@ export default function MetadataPanel() {
 
         {/* Tags */}
         <div className="metadata-section">
-          <div className="metadata-section-title">Tags</div>
+          <div className="metadata-section-title">
+            Tags
+            {selectedPaths.size > 1 && (
+              <span className="multi-select-tag-hint"> · {selectedPaths.size} photos selected</span>
+            )}
+          </div>
 
           {/* AI-suggested tags */}
           {isSuggesting ? (

@@ -43,6 +43,7 @@ declare global {
       getLastFolder(): Promise<ApiResponse<string | null>>
       setLastFolder(folder: string): Promise<ApiResponse<undefined>>
       readSubdirectories(dirPath: string): Promise<ApiResponse<string[]>>
+      countPhotosInDirectory(dirPath: string): Promise<ApiResponse<number>>
       moveFolder(oldPath: string, newPath: string): Promise<ApiResponse<string>>
       renameFolderPath(oldPrefix: string, newPrefix: string): Promise<ApiResponse<undefined>>
 

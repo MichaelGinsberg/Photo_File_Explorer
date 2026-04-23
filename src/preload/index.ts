@@ -115,6 +115,9 @@ const api = {
   readSubdirectories: (dirPath: string): Promise<ApiResponse<string[]>> =>
     ipcRenderer.invoke('fs:readSubdirectories', dirPath),
 
+  countPhotosInDirectory: (dirPath: string): Promise<ApiResponse<number>> =>
+    ipcRenderer.invoke('fs:countPhotosInDirectory', dirPath),
+
   moveFolder: (oldPath: string, newPath: string): Promise<ApiResponse<string>> =>
     ipcRenderer.invoke('fs:moveFolder', oldPath, newPath),
 

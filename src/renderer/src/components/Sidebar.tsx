@@ -8,6 +8,13 @@ interface ContextMenu {
   targetPath: string
 }
 
+interface TreeNode {
+  path: string
+  name: string
+  children: string[] | null  // null = not yet loaded
+  photoCount: number         // -1 = not yet loaded
+}
+
 const INVALID_FOLDER_CHARS = /[/\\*?"<>|:\x00]/
 
 function FolderIcon({ size = 13, className = '' }: { size?: number; className?: string }) {
@@ -27,7 +34,6 @@ export default function Sidebar() {
     tagColorMap
   } = useApp()
 
-  const [subdirs, setSubdirs] = useState<string[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
 
   // New folder state
@@ -45,16 +51,78 @@ export default function Sidebar() {
   // Error from move operation
   const [folderOpError, setFolderOpError] = useState('')
 
-  const loadSubdirs = useCallback((folder: string) => {
-    window.api.readSubdirectories(folder)
-      .then(res => { if (res.success && res.data) setSubdirs(res.data) })
-      .catch(() => setSubdirs([]))
+  // ── Folder tree state ────────────────────────────────────────────────────────
+  // treeRoot is the folder at the top of the visible tree. It only resets when
+  // the user opens a folder that is outside the current tree — not on every
+  // navigateToFolder call, so the tree stays intact as the user browses.
+  const [treeRoot, setTreeRoot] = useState<string | null>(null)
+  const [treeNodes, setTreeNodes] = useState<Record<string, TreeNode>>({})
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const loadNodeChildren = useCallback(async (nodePath: string) => {
+    const [dirsRes, countRes] = await Promise.all([
+      window.api.readSubdirectories(nodePath),
+      window.api.countPhotosInDirectory(nodePath)
+    ])
+    const children = dirsRes.success && dirsRes.data ? dirsRes.data : []
+    const photoCount = countRes.success && countRes.data != null ? countRes.data : 0
+
+    setTreeNodes(prev => {
+      const next = { ...prev }
+      next[nodePath] = { ...next[nodePath], children, photoCount }
+      for (const childPath of children) {
+        if (!next[childPath]) {
+          next[childPath] = {
+            path: childPath,
+            name: childPath.split(/[\\/]/).filter(Boolean).pop() ?? childPath,
+            children: null,
+            photoCount: -1
+          }
+        }
+      }
+      return next
+    })
   }, [])
 
+  // Update treeRoot only when currentFolder moves outside the current tree
   useEffect(() => {
-    if (!currentFolder) { setSubdirs([]); return }
-    loadSubdirs(currentFolder)
-  }, [currentFolder, loadSubdirs])
+    if (!currentFolder) { setTreeRoot(null); setTreeNodes({}); setExpanded(new Set()); return }
+    const isUnderRoot = treeRoot && (
+      currentFolder === treeRoot ||
+      currentFolder.startsWith(treeRoot + '/') ||
+      currentFolder.startsWith(treeRoot + '\\')
+    )
+    if (!isUnderRoot) setTreeRoot(currentFolder)
+  // treeRoot intentionally omitted: we only want to react to currentFolder changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFolder])
+
+  // Reset the tree when treeRoot changes
+  useEffect(() => {
+    if (!treeRoot) return
+    const rootName = treeRoot.split(/[\\/]/).filter(Boolean).pop() ?? treeRoot
+    setTreeNodes({ [treeRoot]: { path: treeRoot, name: rootName, children: null, photoCount: -1 } })
+    setExpanded(new Set([treeRoot]))
+    loadNodeChildren(treeRoot)
+  }, [treeRoot, loadNodeChildren])
+
+  const handleToggleExpand = useCallback(async (nodePath: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const isExpanded = expanded.has(nodePath)
+    if (!isExpanded) {
+      setExpanded(prev => { const next = new Set(prev); next.add(nodePath); return next })
+      const node = treeNodes[nodePath]
+      if (!node || node.children === null) {
+        await loadNodeChildren(nodePath)
+      }
+    } else {
+      setExpanded(prev => { const next = new Set(prev); next.delete(nodePath); return next })
+    }
+  }, [expanded, treeNodes, loadNodeChildren])
+
+  const refreshSubtree = useCallback(async (nodePath: string) => {
+    await loadNodeChildren(nodePath)
+  }, [loadNodeChildren])
 
   // Dismiss context menu on outside click
   useEffect(() => {
@@ -106,8 +174,8 @@ export default function Sidebar() {
     setCreatingIn(null)
     setNewFolderName('')
     setNewFolderError('')
-    if (currentFolder && creatingIn === currentFolder) loadSubdirs(currentFolder)
-  }, [creatingIn, newFolderName, currentFolder, loadSubdirs])
+    if (creatingIn) await refreshSubtree(creatingIn)
+  }, [creatingIn, newFolderName, refreshSubtree])
 
   const handleCancelFolder = useCallback(() => {
     setCreatingIn(null)
@@ -159,9 +227,9 @@ export default function Sidebar() {
     if (wasCurrentFolder) {
       await navigateToFolder(newPath)
     } else if (currentFolder) {
-      loadSubdirs(currentFolder)
+      await refreshSubtree(currentFolder)
     }
-  }, [renamingPath, renameValue, currentFolder, navigateToFolder, loadSubdirs])
+  }, [renamingPath, renameValue, currentFolder, navigateToFolder, refreshSubtree])
 
   const handleCancelRename = useCallback(() => {
     setRenamingPath(null)
@@ -200,9 +268,9 @@ export default function Sidebar() {
     if (currentFolder === targetPath) {
       await navigateToFolder(newPath)
     } else if (currentFolder) {
-      loadSubdirs(currentFolder)
+      await refreshSubtree(currentFolder)
     }
-  }, [contextMenu, currentFolder, navigateToFolder, loadSubdirs])
+  }, [contextMenu, currentFolder, navigateToFolder, refreshSubtree])
 
   // ── Tag group counts ─────────────────────────────────────────────────────────
 
@@ -226,115 +294,68 @@ export default function Sidebar() {
 
   const allActive = filterTags.length === 0 && activeGroupId === null
 
-  const folderName = currentFolder
-    ? currentFolder.split(/[\\/]/).filter(Boolean).pop() ?? currentFolder
-    : null
+  const renderTree = (nodePath: string, depth: number): React.ReactNode => {
+    const node = treeNodes[nodePath]
+    if (!node) return null
+    const isExpanded = expanded.has(nodePath)
+    const isActive = nodePath === currentFolder
+    const children = node.children ?? []
+    const hasChildren = node.children === null || children.length > 0
 
-  return (
-    <aside className="sidebar">
-      {/* ── Folder section (fixed, not in scroll area) ── */}
-      <div className="sidebar-header">
-        <span className="sidebar-title">Folder</span>
-      </div>
-      <div className="sidebar-folder">
-        {renamingPath === currentFolder ? (
-          <div className="new-folder-form">
-            <div className="new-folder-row">
-              <FolderIcon className="new-folder-icon" />
-              <input
-                ref={renameInputRef}
-                className="new-folder-input"
-                type="text"
-                value={renameValue}
-                onChange={e => { setRenameValue(e.target.value); setRenameError('') }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleRenameFolder()
-                  else if (e.key === 'Escape') handleCancelRename()
-                }}
-              />
-              <button className="rename-confirm-btn" onMouseDown={handleRenameFolder} title="Confirm (Enter)">✓</button>
-              <button className="rename-cancel-btn" onMouseDown={handleCancelRename} title="Cancel (Esc)">✕</button>
-            </div>
+    return (
+      <React.Fragment key={nodePath}>
+        {renamingPath === nodePath ? (
+          <div className="ft-rename-row" style={{ paddingLeft: depth * 14 + 6 }}>
+            <FolderIcon className="ft-icon" />
+            <input
+              ref={renameInputRef}
+              className="new-folder-input"
+              value={renameValue}
+              onChange={e => { setRenameValue(e.target.value); setRenameError('') }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleRenameFolder()
+                else if (e.key === 'Escape') handleCancelRename()
+              }}
+            />
+            <button className="rename-confirm-btn" onMouseDown={handleRenameFolder}>✓</button>
+            <button className="rename-cancel-btn" onMouseDown={handleCancelRename}>✕</button>
             {renameError && <div className="new-folder-error">{renameError}</div>}
           </div>
         ) : (
-          <button
-            className="sidebar-folder-btn"
-            onClick={openFolder}
-            onContextMenu={(e) => currentFolder && handleContextMenu(e, currentFolder)}
-            title={currentFolder ?? 'Open a folder'}
+          <div
+            className={`ft-row${isActive ? ' ft-row--active' : ''}`}
+            onContextMenu={e => handleContextMenu(e, nodePath)}
           >
-            <FolderIcon size={15} className="sidebar-folder-icon" />
-            <span className="sidebar-folder-text">
-              {folderName
-                ? <>
-                    <span className="sidebar-folder-name">{folderName}</span>
-                    <span className="sidebar-folder-path">{currentFolder}</span>
-                  </>
-                : <span className="sidebar-folder-placeholder">Open a folder…</span>
-              }
+            <span className="ft-indent" style={{ width: depth * 14 }} />
+            <button
+              className={`ft-arrow${hasChildren ? '' : ' ft-arrow--hidden'}`}
+              onClick={e => handleToggleExpand(nodePath, e)}
+              tabIndex={-1}
+              aria-label={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? '▾' : '▸'}
+            </button>
+            <button
+              className="ft-label"
+              onClick={() => navigateToFolder(nodePath)}
+              title={nodePath}
+            >
+              <FolderIcon className="ft-icon" />
+              <span className="ft-name">{node.name}</span>
+            </button>
+            <span className="ft-count">
+              {node.photoCount >= 0 ? node.photoCount : ''}
             </span>
-            <svg className="sidebar-folder-chevron" width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M4.646 1.646a.5.5 0 01.708 0l6 6a.5.5 0 010 .708l-6 6a.5.5 0 01-.708-.708L10.293 8 4.646 2.354a.5.5 0 010-.708z"/>
-            </svg>
-          </button>
-        )}
-
-        {folderOpError && (
-          <div className="new-folder-error" style={{ marginTop: 4 }}>{folderOpError}</div>
-        )}
-
-        {subdirs.length > 0 && (
-          <div className="subdir-list">
-            {subdirs.map(dirPath => {
-              const dirName = dirPath.split(/[\\/]/).filter(Boolean).pop() ?? dirPath
-              if (renamingPath === dirPath) {
-                return (
-                  <div key={dirPath} className="new-folder-form" style={{ margin: '1px 0' }}>
-                    <div className="new-folder-row">
-                      <FolderIcon className="new-folder-icon" />
-                      <input
-                        ref={renameInputRef}
-                        className="new-folder-input"
-                        type="text"
-                        value={renameValue}
-                        onChange={e => { setRenameValue(e.target.value); setRenameError('') }}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') handleRenameFolder()
-                          else if (e.key === 'Escape') handleCancelRename()
-                        }}
-                      />
-                      <button className="rename-confirm-btn" onMouseDown={handleRenameFolder} title="Confirm (Enter)">✓</button>
-                      <button className="rename-cancel-btn" onMouseDown={handleCancelRename} title="Cancel (Esc)">✕</button>
-                    </div>
-                    {renameError && <div className="new-folder-error">{renameError}</div>}
-                  </div>
-                )
-              }
-              return (
-                <button
-                  key={dirPath}
-                  className="subdir-item"
-                  onClick={() => navigateToFolder(dirPath)}
-                  onContextMenu={(e) => handleContextMenu(e, dirPath)}
-                  title={dirPath}
-                >
-                  <FolderIcon className="subdir-item-icon" />
-                  <span className="subdir-item-label">{dirName}</span>
-                </button>
-              )
-            })}
           </div>
         )}
-
-        {creatingIn && (
-          <div className="new-folder-form">
-            <div className="new-folder-row">
-              <FolderIcon className="new-folder-icon" />
+        {isExpanded && children.map(childPath => renderTree(childPath, depth + 1))}
+        {creatingIn === nodePath && (
+          <>
+            <div className="ft-new-folder-row" style={{ paddingLeft: (depth + 1) * 14 + 24 }}>
+              <FolderIcon className="ft-icon" />
               <input
                 ref={newFolderInputRef}
                 className="new-folder-input"
-                type="text"
                 placeholder="New folder name…"
                 value={newFolderName}
                 onChange={e => { setNewFolderName(e.target.value); setNewFolderError('') }}
@@ -344,16 +365,44 @@ export default function Sidebar() {
                 }}
               />
             </div>
-            {newFolderError && <div className="new-folder-error">{newFolderError}</div>}
-          </div>
+            {newFolderError && (
+              <div className="new-folder-error" style={{ paddingLeft: (depth + 1) * 14 + 24 }}>{newFolderError}</div>
+            )}
+          </>
         )}
+      </React.Fragment>
+    )
+  }
+
+  return (
+    <aside className="sidebar">
+      {/* ── Folders header ── */}
+      <div className="sidebar-header sidebar-header--folders">
+        <span className="sidebar-title">Folders</span>
+        <button className="sidebar-new-btn" onClick={openFolder} title="Open a different folder">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M.54 3.87L.5 3a2 2 0 012-2h3.19a2 2 0 011.45.63l.33.37H14a2 2 0 012 2v8.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 010 12.5V3.87z"/>
+          </svg>
+        </button>
       </div>
 
-      {/* ── Scrollable area: Tags + Tag Groups ── */}
+      {/* ── Scrollable area ── */}
       <div className="sidebar-scroll-area">
 
+        {/* Folder tree */}
+        <div className="folder-tree">
+          {!treeRoot ? (
+            <div className="sidebar-empty">
+              <button className="btn btn-secondary btn-sm" style={{ width: '100%' }} onClick={openFolder}>
+                Open a folder…
+              </button>
+            </div>
+          ) : renderTree(treeRoot, 0)}
+          {folderOpError && <div className="new-folder-error" style={{ padding: '4px 8px' }}>{folderOpError}</div>}
+        </div>
+
         {/* Tags section */}
-        <div className="sidebar-header sidebar-header--tags">
+        <div className="sidebar-header sidebar-header--tags sidebar-sticky-header">
           <span className="sidebar-title">Tags</span>
         </div>
 
@@ -406,7 +455,7 @@ export default function Sidebar() {
         </nav>
 
         {/* Tag Groups section */}
-        <div className="sidebar-header sidebar-header--groups">
+        <div className="sidebar-header sidebar-header--groups sidebar-sticky-header">
           <span className="sidebar-title">Tag Groups</span>
           <button
             className="sidebar-new-btn"
